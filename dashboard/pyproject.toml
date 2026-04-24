@@ -1,0 +1,26 @@
+[project]
+name = "claude-dashboard"
+version = "0.1.0"
+description = "LAN-only internal dashboard for claude-system. FastAPI + Jinja2 + HTMX + SSE."
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "jinja2>=3.1",
+  "sse-starlette>=2",
+  "pyyaml>=6",
+  "coordinator",
+]
+
+[project.scripts]
+claude-dashboard = "dashboard.app:run"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["dashboard*"]
+
+[tool.uv.sources]
+coordinator = { path = "../coordinator", editable = true }

@@ -57,8 +57,16 @@ loop. See `~/.claude/rules/evaluation.md`.
    - If `--experiment` was given, use it.
    - Else find the experiment folder with the most recent
      `status: implemented` (check frontmatter of
-     `experiments/*/README.md`). If none exists, abort and suggest
-     running `/propose` from scratch.
+     `experiments/*/README.md`).
+   - **Bootstrap case (no implemented experiment yet):** look for the
+     most recent proposal at `experiments/_proposals/*.md` with
+     `status: proposed`. If exactly one exists, auto-invoke
+     `/implement <proposal-path>` as cycle 0 and then continue from
+     step 1 (now there's an implemented experiment to seed from).
+     If zero proposals exist, abort and suggest running `/propose`
+     from scratch. If multiple, list them and ask the user which to
+     use. This removes the "`/iterate` aborts on a fresh project"
+     failure mode that bit the Phase 5 smoke test.
 
 2. **Read its `## Diagnostics`** section and its `metrics.json`. If
    the section is missing or `intended_effect_confirmed` is empty,

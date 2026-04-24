@@ -1,0 +1,14 @@
+[Unit]
+Description=claude-system dashboard (LAN-only FastAPI)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart={{REPO_ROOT}}/dashboard/.venv/bin/claude-dashboard
+Restart=on-failure
+RestartSec=5
+Environment=CLAUDE_DASHBOARD_BIND=0.0.0.0:8080
+WorkingDirectory={{REPO_ROOT}}
+
+[Install]
+WantedBy=default.target
