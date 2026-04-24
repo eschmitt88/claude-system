@@ -1,0 +1,10 @@
+[Unit]
+Description=claude-system hardware poller (one-shot sampler)
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart={{REPO_ROOT}}/coordinator/.venv/bin/claude-coordinator-poll
+WorkingDirectory={{REPO_ROOT}}
+# Don't swamp the system — poller is negligible but set Nice anyway.
+Nice=10
