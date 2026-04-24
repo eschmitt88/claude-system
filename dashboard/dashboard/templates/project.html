@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Project: {{ project }}</h1>
+
+<section class="summary">
+  <p>
+    <strong>Tokens last 7d:</strong> {{ "{:,}".format(tokens_7d.total) }} total ·
+    <strong>Unprocessed inbox items:</strong> {{ inbox }}
+  </p>
+</section>
+
+{% if diagnostics %}
+<section class="diagnostics">
+  <h2>Latest Diagnostics</h2>
+  <pre>{{ diagnostics }}</pre>
+</section>
+{% endif %}
+
+<section>
+  <h2>Cycles (last {{ cycles|length }})</h2>
+  {% if cycles %}
+  <table>
+    <thead>
+      <tr>
+        <th>slug</th>
+        <th>status</th>
+        <th>val metric</th>
+        <th>final metric</th>
+        <th>result</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in cycles %}
+      <tr>
+        <td><code>{{ c.slug }}</code></td>
+        <td>{{ c.status }}</td>
+        <td>
+          {% if c.metrics %}
+            {% for k, v in c.metrics.items() %}
+              {% if loop.index <= 1 %}{{ k }}={{ v }}{% endif %}
+            {% endfor %}
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if c.final_metrics %}
+            {{ c.final_metrics.metric_name or "metric" }}={{ c.final_metrics.metric_value }}
+          {% else %}—{% endif %}
+        </td>
+        <td class="result">{{ c.result or "" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="fine">no experiments yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

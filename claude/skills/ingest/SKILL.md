@@ -52,73 +52,24 @@ it raises.
 8. **Show the diff** for every file proposed/modified and wait for
    confirmation.
 
-## Sub-contract: meta-project import back-reference
+## Cross-project import back-reference — call `/sync-imports`
 
-The `agentic-research` project at
-`~/projects/research/agentic-research/` is the shared hub whose
-`concepts/` directory other projects `@import` from. On every
-`/ingest` invocation, detect imports and record a back-reference on
-the source concept so the meta project can see which patterns are
-load-bearing.
+The back-reference append logic (scan `@import` directives → append
+idempotent `used_by:` entries on the meta side) lives in the
+dedicated `/sync-imports` skill. `/ingest` calls it as part of step
+7 so any concept-file modifications land in the same diff batch as
+the literature-note and local-concept changes.
 
-### Trigger
+Specifically: in step 7, invoke `/sync-imports` on the active project
+before showing the diff. Any concept-file modifications it produces
+are added to the batch and the user confirms once; all files are
+written on confirmation or none on refusal.
 
-Scan the following files on the active project for `@import`
-directives pointing at paths under
-`~/projects/research/agentic-research/concepts/`:
-
-- the project root `CLAUDE.md`;
-- every file under `.claude/rules/**/*.md`;
-- the file being ingested (in case a new raw source itself imports).
-
-Resolve `~` to the invoking user's home. Skip the sub-contract
-entirely when the active project *is* `agentic-research` — the meta
-project does not back-reference itself.
-
-### Action
-
-For each unique absolute path matched, read the target concept file
-and perform this append-if-missing operation on its frontmatter's
-`used_by:` list:
-
-```yaml
-used_by:
-  - project_slug: <active-project-slug>
-    imported_on: <YYYY-MM-DD>
-```
-
-Idempotency rule: **do not add a duplicate entry for the same
-`project_slug`**. If an entry already exists with that slug, leave
-the list untouched — regardless of whether the `imported_on` date
-differs. The first import timestamp is the one we keep; later imports
-confirm continued use but do not overwrite history.
-
-If `used_by:` is absent or not a list, initialize it as a list with
-the single entry above.
-
-### Retired-status warning
-
-Before writing, read the target concept's `status:` field. If
-`status: retired`, emit a one-line warning to the user on the
-downstream side ("WARNING: importing retired concept <name>; see
-<concept-path> for what replaces it") but still perform the append.
-The import is allowed — the back-reference is still useful to the
-meta project as signal that someone is hanging on to a retired
-pattern — but the user should be told.
-
-### Target-missing handling
-
-If an `@import` points at a path under the meta-project concepts
-directory that does not exist, emit a one-line warning ("WARNING:
-@import target <path> not found") and skip the append for that
-target. Do not fabricate the target file. Do not abort the ingest.
-
-### Inclusion in the diff batch
-
-Any concept-file modifications produced by this sub-contract are
-shown in the same diff batch as the literature-note and local-concept
-changes in step 8. The user confirms once; all files are written on
-confirmation or none on refusal.
+This was previously an inline sub-contract inside `/ingest`, which
+meant the back-reference only ran when ingesting a raw file.
+Factoring it out (Phase 6 bug 9) lets any project invoke it
+independently — useful for `/new-project` and for manual re-runs
+after editing `CLAUDE.md`.
 
 ## Notes
 

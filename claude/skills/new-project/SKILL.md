@@ -72,7 +72,16 @@ Scaffold a new research project.
    these, emit a one-line warning and continue — the skill must not
    fail because a remote couldn't be created.
 
-7. **Report**: print the resulting tree (depth 2) and the slug's absolute
+7. **Sync imports**: if the scaffolded `CLAUDE.md` contains any
+   `@import` lines pointing at
+   `~/projects/research/agentic-research/concepts/`, run
+   `/sync-imports` so the meta project's concept files gain their
+   `used_by:` back-references immediately. This was previously
+   deferred until the first `/ingest`; running it here fixes Phase 5
+   bug 9 (back-references were invisible until a raw file was
+   ingested).
+
+8. **Report**: print the resulting tree (depth 2) and the slug's absolute
    path so the user knows where work lives. If a remote was created,
    print its URL.
 

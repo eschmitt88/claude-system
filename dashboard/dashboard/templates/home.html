@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Now</h1>
+
+<section class="tokens">
+  <h2>Claude token usage (locally observed)</h2>
+  <div class="meter">
+    <strong>Last 5h:</strong>
+    {{ "{:,}".format(tokens_5h.total) }} total
+    (in {{ "{:,}".format(tokens_5h.input_tokens) }} / out {{ "{:,}".format(tokens_5h.output_tokens) }} / cache_read {{ "{:,}".format(tokens_5h.cache_read_tokens) }})
+  </div>
+  <div class="meter">
+    <strong>Last 7d:</strong>
+    {{ "{:,}".format(tokens_7d.total) }} total
+    (in {{ "{:,}".format(tokens_7d.input_tokens) }} / out {{ "{:,}".format(tokens_7d.output_tokens) }} / cache_read {{ "{:,}".format(tokens_7d.cache_read_tokens) }})
+  </div>
+  <p class="fine">Local accumulator. Anthropic does not expose rolling-window quota — run <code>ccusage</code> for reset boundaries.</p>
+</section>
+
+<section class="hw" id="hw">
+  <h2>Hardware (latest sample)</h2>
+  {% if hw %}
+    <div>CPU {{ "%.0f" % hw.cpu_percent }}% · RAM {{ "%.0f" % hw.ram_percent }}% ({{ "%.1f" % hw.ram_used_gb }} / {{ "%.1f" % hw.ram_total_gb }} GB)</div>
+    <div>Disk free: {{ "%.1f" % hw.disk_free_gb }} GB on /mnt/projects</div>
+    {% if hw.gpu_util_pct is not none %}
+      <div>GPU util {{ "%.0f" % hw.gpu_util_pct }}% · VRAM {{ "%.1f" % hw.gpu_mem_used_gb }} / {{ "%.1f" % hw.gpu_mem_total_gb }} GB · {{ "%.0f" % hw.gpu_temp_c }}°C · {{ "%.0f" % hw.gpu_power_w }} W</div>
+    {% endif %}
+    <div class="fine">sampled at {{ hw.timestamp }}</div>
+  {% else %}
+    <div class="warn">No hardware samples yet. Check <code>systemctl --user status claude-hw-poller.timer</code>.</div>
+  {% endif %}
+</section>
+
+<section class="loops">
+  <h2>Active loop sessions</h2>
+  {% if loops %}
+    <ul>
+      {% for l in loops %}
+        <li><code>{{ l.name }}</code> · created {{ l.created }} · {% if l.attached %}attached{% else %}detached{% endif %}</li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="fine">no tmux sessions with <code>loop*</code> names.</p>
+  {% endif %}
+</section>
+
+<script>
+  const src = new EventSource("/events");
+  src.addEventListener("snapshot", (e) => {
+    const d = JSON.parse(e.data);
+    if (d.hw) {
+      const hw = d.hw;
+      document.getElementById("hw").innerHTML = `
+        <h2>Hardware (live)</h2>
+        <div>CPU ${hw.cpu_percent.toFixed(0)}% · RAM ${hw.ram_percent.toFixed(0)}% (${hw.ram_used_gb.toFixed(1)}/${hw.ram_total_gb.toFixed(1)} GB)</div>
+        <div>Disk free: ${hw.disk_free_gb.toFixed(1)} GB on /mnt/projects</div>
+        ${hw.gpu_util_pct !== null
+          ? `<div>GPU util ${hw.gpu_util_pct.toFixed(0)}% · VRAM ${hw.gpu_mem_used_gb.toFixed(1)}/${hw.gpu_mem_total_gb.toFixed(1)} GB · ${hw.gpu_temp_c.toFixed(0)}°C · ${hw.gpu_power_w.toFixed(0)} W</div>`
+          : ""}
+        <div class="fine">sampled at ${hw.timestamp}</div>`;
+    }
+  });
+</script>
+{% endblock %}
