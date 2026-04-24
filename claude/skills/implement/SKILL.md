@@ -70,13 +70,22 @@ that is allowed to spawn a subagent.
    f. The resolved `budget.yaml` hardware block (plain YAML).
 
    Prepend a short preamble telling the subagent:
-   - You are the MLE. The main agent is the IDEATOR. Do not re-argue
-     the hypothesis — execute it.
-   - Obey `~/.claude/rules/evaluation.md`: `test/` is off-limits,
-     `metrics.json` is validation, `final_metrics.json` is never
-     written during search.
-   - You may run `/new-experiment <slug>` where `<slug>` is from the
-     proposal frontmatter.
+   - You are the IMPLEMENTER. The main agent is the IDEATOR. Do not
+     re-argue the hypothesis — execute it. (Label it MLE when the
+     proposal is ML work, but the contract is the same regardless
+     of domain: literature triage, scraping, analysis, ML — all
+     valid.)
+   - If the project opts into HCE (see
+     `~/.claude/rules/evaluation.md`): `test/` is off-limits,
+     `metrics.json` is the search signal, `final_metrics.json` is
+     never written during search. Skip this clause entirely for
+     projects without an evaluation holdout.
+   - **Idempotency**: if the experiment folder at
+     `experiments/YYYY-MM-DD-<slug>/` already exists (because
+     `/mle-task`, `/new-experiment`, or another upstream skill
+     scaffolded it), **skip `/new-experiment`** and work in the
+     existing folder. Otherwise run `/new-experiment <slug>` with
+     `<slug>` from the proposal frontmatter.
    - You may write code, edit `config.yaml`, and run `dvc exp run`.
    - You must capture `metrics.json` (validation) and populate
      `results/`.
