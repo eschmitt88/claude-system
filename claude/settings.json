@@ -50,6 +50,16 @@
           }
         ]
       }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/pretooluse_cap.sh"
+          }
+        ]
+      }
     ]
   },
   "effortLevel": "xhigh",

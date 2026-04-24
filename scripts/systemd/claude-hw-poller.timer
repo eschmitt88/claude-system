@@ -1,0 +1,12 @@
+[Unit]
+Description=Run claude-hw-poller every 30s
+After=network.target
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=5s
+Unit=claude-hw-poller.service
+
+[Install]
+WantedBy=timers.target
