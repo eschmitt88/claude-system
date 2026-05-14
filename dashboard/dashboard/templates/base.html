@@ -2,23 +2,162 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>claude-system · {{ title or "dashboard" }}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title or "claude-system" }}</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/style.css">
-  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='10' fill='%232563eb'/%3E%3C/svg%3E">
 </head>
 <body>
-  <header>
-    <nav>
-      <strong>claude-system</strong>
-      <a href="/">now</a>
-      <a href="/queue">queue</a>
-      <span class="projects">
-        {% for p in projects or [] %}<a href="/project/{{ p.name }}">{{ p.name }}</a>{% endfor %}
+  <header class="app-header">
+    <div class="row">
+      <span class="brand"><span class="dot"></span>claude-system</span>
+      <nav class="primary">
+        <a href="/" class="{% if active == 'home' %}active{% endif %}">Now</a>
+        <a href="/projects-hub" class="{% if active == 'projects' %}active{% endif %}">Projects</a>
+        <a href="/queue" class="{% if active == 'queue' %}active{% endif %}">Queue</a>
+      </nav>
+      <span class="spacer"></span>
+      <span class="live-strip" id="live-strip">
+        {%- macro pip(label, val, klass='') -%}
+          <span class="pip {{ klass }}"><span class="label">{{ label }}</span><span class="v">{{ val }}</span></span>
+        {%- endmacro -%}
+        {% if live and live.tokens_5h %}{{ pip('5h tokens', '{:,}'.format(live.tokens_5h.total)) }}{% endif %}
+        {% if live and live.hw %}
+          {% set hw = live.hw %}
+          {{ pip('CPU', '%.0f%%' % hw.cpu_percent, 'warn' if hw.cpu_percent > 80 else '') }}
+          {{ pip('RAM', '%.0f%%' % hw.ram_percent, 'warn' if hw.ram_percent > 85 else '') }}
+          {% if hw.gpu_util_pct is not none %}
+            {{ pip('GPU', '%.0f%%' % hw.gpu_util_pct, 'warn' if hw.gpu_util_pct > 80 else ('good' if hw.gpu_util_pct > 5 else '')) }}
+            {{ pip('VRAM', '%.1fG / %.1fG' % (hw.gpu_mem_used_gb, hw.gpu_mem_total_gb)) }}
+          {% endif %}
+        {% endif %}
       </span>
+      <button class="search-trigger" onclick="openPalette()">
+        <span>Search</span>
+        <kbd>/</kbd>
+      </button>
+    </div>
+    {% if project %}
+    <nav class="subnav">
+      <span class="subnav-label">{{ project }}</span>
+      <a href="/project/{{ project }}" class="{% if active == 'overview' %}active{% endif %}">Overview</a>
+      <a href="/project/{{ project }}/candidates" class="{% if active == 'candidates' %}active{% endif %}">Candidates</a>
+      <a href="/project/{{ project }}/literature" class="{% if active == 'literature' %}active{% endif %}">Literature</a>
+      <a href="/project/{{ project }}/concepts" class="{% if active == 'concepts' %}active{% endif %}">Concepts</a>
     </nav>
+    {% endif %}
   </header>
+
   <main>
     {% block content %}{% endblock %}
   </main>
+
+  <!-- command palette -->
+  <div class="palette-overlay" id="palette-overlay" onclick="if(event.target.id==='palette-overlay')closePalette()">
+    <div class="palette">
+      <input id="palette-input" type="text" placeholder="Search literature, concepts, experiments…" autocomplete="off">
+      <ul id="palette-results"><li class="empty">type to search</li></ul>
+    </div>
+  </div>
+
+  <script>
+  // Live strip via SSE — initial values rendered server-side; SSE just updates.
+  (function() {
+    const strip = document.getElementById('live-strip');
+    if (!strip) return;
+    function pip(label, value, klass) {
+      return `<span class="pip ${klass||''}"><span class="label">${label}</span><span class="v">${value}</span></span>`;
+    }
+    function fmt(g) { return g.toFixed(1) + 'G'; }
+    function render(d) {
+      const hw = d.hw, tk = d.tokens_5h;
+      let html = '';
+      if (tk) html += pip('5h tokens', tk.total.toLocaleString());
+      if (hw) {
+        html += pip('CPU', hw.cpu_percent.toFixed(0)+'%', hw.cpu_percent > 80 ? 'warn' : '');
+        html += pip('RAM', hw.ram_percent.toFixed(0)+'%', hw.ram_percent > 85 ? 'warn' : '');
+        if (hw.gpu_util_pct !== null) {
+          html += pip('GPU', hw.gpu_util_pct.toFixed(0)+'%', hw.gpu_util_pct > 80 ? 'warn' : (hw.gpu_util_pct > 5 ? 'good' : ''));
+          html += pip('VRAM', fmt(hw.gpu_mem_used_gb)+' / '+fmt(hw.gpu_mem_total_gb));
+        }
+      }
+      strip.innerHTML = html;
+    }
+    // No initial fetch — server already rendered first values.
+    let src;
+    function connect() {
+      src = new EventSource('/events');
+      src.addEventListener('snapshot', e => { try { render(JSON.parse(e.data)); } catch(_){} });
+      src.addEventListener('error', () => { src.close(); setTimeout(connect, 4000); });
+    }
+    // Pause SSE while the tab is hidden so the server doesn't keep N idle clients.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && src) { src.close(); src = null; }
+      else if (!document.hidden && !src) { connect(); }
+    });
+    if (!document.hidden) connect();
+  })();
+
+  // Keyboard nav: g h, g q, /, ESC.
+  (function() {
+    let pending = null;
+    document.addEventListener('keydown', e => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === '/') { e.preventDefault(); openPalette(); return; }
+      if (e.key === 'Escape') { closePalette(); return; }
+      if (e.key === 'g') { pending = 'g'; setTimeout(() => pending=null, 1000); return; }
+      if (pending === 'g') {
+        if (e.key === 'h') location.href = '/';
+        else if (e.key === 'q') location.href = '/queue';
+        pending = null;
+      }
+    });
+  })();
+
+  // Command palette.
+  let paletteIdx = 0, paletteResults = [];
+  function openPalette() {
+    document.getElementById('palette-overlay').classList.add('open');
+    const inp = document.getElementById('palette-input');
+    inp.value = ''; inp.focus(); paletteResults = [];
+    document.getElementById('palette-results').innerHTML = '<li class="empty">type to search</li>';
+  }
+  function closePalette() { document.getElementById('palette-overlay').classList.remove('open'); }
+  function renderPalette() {
+    const ul = document.getElementById('palette-results');
+    if (!paletteResults.length) { ul.innerHTML = '<li class="empty">no matches</li>'; return; }
+    ul.innerHTML = paletteResults.map((r, i) =>
+      `<li class="${i===paletteIdx?'selected':''}" onmouseenter="paletteIdx=${i};renderPalette()" onclick="location.href='${r.url}'">
+         <span class="kind">${r.kind}</span><span class="title">${r.title}</span><span class="where">${r.where}</span>
+       </li>`
+    ).join('');
+  }
+  (function() {
+    const inp = document.getElementById('palette-input');
+    if (!inp) return;
+    let t = null;
+    inp.addEventListener('input', e => {
+      clearTimeout(t);
+      const q = e.target.value.trim();
+      if (!q) {
+        paletteResults = [];
+        document.getElementById('palette-results').innerHTML = '<li class="empty">type to search</li>';
+        return;
+      }
+      t = setTimeout(() => {
+        fetch('/api/search?q=' + encodeURIComponent(q))
+          .then(r => r.json())
+          .then(d => { paletteResults = d.results; paletteIdx = 0; renderPalette(); });
+      }, 80);
+    });
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') { paletteIdx = Math.min(paletteResults.length-1, paletteIdx+1); renderPalette(); e.preventDefault(); }
+      else if (e.key === 'ArrowUp') { paletteIdx = Math.max(0, paletteIdx-1); renderPalette(); e.preventDefault(); }
+      else if (e.key === 'Enter' && paletteResults[paletteIdx]) { location.href = paletteResults[paletteIdx].url; }
+    });
+  })();
+  </script>
 </body>
 </html>
