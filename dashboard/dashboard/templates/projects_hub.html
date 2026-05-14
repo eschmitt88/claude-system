@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Projects</h1>
+<p class="subtitle">Research projects under <code>~/projects/research/</code>. Each row links to the project's overview and, if available, its interactive dashboard.</p>
+
+{% if rows %}
+<div class="projects-hub">
+  {% for r in rows %}
+  <div class="project-row {% if r.dashboard %}has-dashboard{% endif %}">
+    <div class="project-meta">
+      <a class="project-name" href="/project/{{ r.name }}">{{ r.name }}</a>
+      <div class="project-stats">
+        {% set st = r.status %}
+        <span class="stat-pill">
+          <span class="k">candidates</span>
+          <span class="v {% if st.candidates_count and st.candidates_count > 0 %}attention-inline{% endif %}">{{ st.candidates_count or 0 }}</span>
+        </span>
+        <span class="stat-pill">
+          <span class="k">pending</span>
+          <span class="v">{{ st.pending_proposals or 0 }}</span>
+        </span>
+        <span class="stat-pill">
+          <span class="k">last digest</span>
+          <span class="v">{% if st.last_digest_age_days is not none %}{{ "%.0f"|format(st.last_digest_age_days) }}d{% else %}—{% endif %}</span>
+        </span>
+      </div>
+    </div>
+
+    <div class="project-actions">
+      {% if r.dashboard %}
+        <div class="dashboard-card">
+          <div class="dashboard-head">
+            <span class="dashboard-kind kind-{{ r.dashboard.kind }}">{{ r.dashboard.kind }}</span>
+            <span class="dashboard-title">{{ r.dashboard.title }}</span>
+          </div>
+          {% if r.dashboard.description %}
+          <div class="dashboard-desc">{{ r.dashboard.description }}</div>
+          {% endif %}
+          <div class="dashboard-controls">
+            {% if r.dashboard.kind == "static" %}
+              <a class="btn primary" href="/projects/{{ r.name }}/dashboard/" target="_blank" rel="noopener">Open dashboard ↗</a>
+            {% elif r.dashboard.kind == "server" %}
+              <span class="btn disabled" title="Server-backed dashboards not yet supported. Add a start/stop button here once Tier-2 lands.">Start (not yet wired)</span>
+              {% if r.dashboard.port %}
+              <span class="port-hint mono">port {{ r.dashboard.port }}</span>
+              {% endif %}
+            {% endif %}
+          </div>
+          {% if r.dashboard.tags %}
+          <div class="dashboard-tags">
+            {% for t in r.dashboard.tags %}<span class="tag">{{ t }}</span>{% endfor %}
+          </div>
+          {% endif %}
+        </div>
+      {% else %}
+        <div class="dashboard-card no-dashboard">
+          <div class="no-dashboard-msg">No dashboard yet.</div>
+          <div class="no-dashboard-hint mono">add <code>dashboard.yaml</code> at project root or under <code>dashboard/</code></div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card-empty">No projects yet — <code>cd ~/projects/research && claude</code>, then <code>/new-project &lt;slug&gt;</code>.</div>
+{% endif %}
+
+<h2>How this works</h2>
+<div class="card hub-explainer">
+  <p>Each project may declare an interactive dashboard via a <code>dashboard.yaml</code> manifest. Two kinds are recognized:</p>
+  <ul>
+    <li><strong>static</strong> — files served directly from the project's <code>dashboard/</code> directory. No process to start. Always available.</li>
+    <li><strong>server</strong> — declares a port and start command. Tier-2 will add start/stop control here. Not yet wired.</li>
+  </ul>
+  <p>The hub auto-discovers manifests at <code>&lt;project&gt;/dashboard.yaml</code> or <code>&lt;project&gt;/dashboard/dashboard.yaml</code>. Adding one is the only thing needed for a project to show up here with a dashboard link.</p>
+</div>
+
+<style>
+.projects-hub {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin: 16px 0 32px;
+}
+.project-row {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) 2fr;
+  gap: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 16px 20px;
+  box-shadow: var(--shadow-1);
+  transition: border-color .12s;
+}
+.project-row.has-dashboard { border-color: var(--accent-border); }
+.project-row:hover { border-color: var(--border-strong); }
+.project-row.has-dashboard:hover { border-color: var(--accent); }
+
+.project-meta { min-width: 0; }
+.project-name {
+  display: block;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--ink);
+  border-bottom: none;
+  margin-bottom: 8px;
+}
+.project-name:hover { color: var(--accent); }
+
+.project-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.stat-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.stat-pill .k { color: var(--ink-3); }
+.stat-pill .v { font-family: var(--font-mono); color: var(--ink); }
+.stat-pill .v.attention-inline { color: var(--warn); font-weight: 600; }
+
+.dashboard-card {
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+  padding: 12px 14px;
+  border: 1px solid transparent;
+}
+.dashboard-card.no-dashboard {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--ink-3);
+}
+.dashboard-head { display:flex; align-items:center; gap:8px; margin-bottom:4px; }
+.dashboard-kind {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.kind-static { background: var(--accent-soft); color: var(--accent); }
+.kind-server { background: var(--warn-soft); color: var(--warn); }
+.dashboard-title { font-weight: 600; color: var(--ink); }
+.dashboard-desc { font-size: 12px; color: var(--ink-3); margin-bottom: 8px; white-space: pre-wrap; }
+
+.dashboard-controls { display:flex; align-items:center; gap:10px; margin-top: 8px; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink-2);
+  border-bottom: 1px solid var(--border-strong);
+  transition: all .12s;
+}
+.btn:hover { color: var(--ink); border-color: var(--ink-3); }
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+.btn.primary:hover { background: var(--accent-hover); color: white; }
+.btn.disabled { opacity: .5; cursor: not-allowed; }
+
+.port-hint { font-size: 11px; color: var(--ink-3); }
+.dashboard-tags { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+.tag {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  color: var(--ink-3);
+}
+.no-dashboard-msg { font-size: 13px; }
+.no-dashboard-hint { font-size: 11px; margin-top: 4px; }
+.no-dashboard-hint code {
+  background: var(--surface-2);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+.hub-explainer { padding: 16px 20px; font-size: 13px; color: var(--ink-2); }
+.hub-explainer ul { margin: 8px 0 8px 18px; padding: 0; }
+.hub-explainer li { margin: 4px 0; }
+.hub-explainer code {
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+
+@media (max-width: 768px) {
+  .project-row { grid-template-columns: 1fr; gap: 12px; }
+}
+</style>
+{% endblock %}
