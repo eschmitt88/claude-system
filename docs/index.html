@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>claude-system — framework map</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1d212b; --ink:#e6e9ef; --mut:#9aa4b2;
+    --line:#2a2f3a; --acc:#7aa2f7; --acc2:#9ece6a; --acc3:#e0af68; --acc4:#bb9af7;
+    --code:#1b1f27; --pill:#222735;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  code,kbd,.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;}
+  a{color:var(--acc);text-decoration:none} a:hover{text-decoration:underline}
+  .wrap{display:grid;grid-template-columns:248px minmax(0,1fr);max-width:1200px;margin:0 auto;}
+  /* sidebar */
+  nav{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;
+    padding:24px 16px;border-right:1px solid var(--line);background:var(--panel);}
+  nav h1{font-size:15px;letter-spacing:.02em;margin:0 0 2px}
+  nav .sub{color:var(--mut);font-size:12px;margin-bottom:18px}
+  nav a{display:block;color:var(--mut);padding:4px 8px;border-radius:6px;font-size:13.5px}
+  nav a:hover{background:var(--panel2);color:var(--ink);text-decoration:none}
+  nav .grp{color:#6b7280;text-transform:uppercase;font-size:10.5px;letter-spacing:.08em;margin:16px 8px 4px}
+  /* content */
+  main{padding:40px 44px 120px;min-width:0}
+  header.hero{margin-bottom:8px}
+  header.hero h1{font-size:30px;margin:0 0 6px}
+  header.hero p{color:var(--mut);max-width:70ch;margin:0 0 4px}
+  .badges{margin:14px 0 8px}
+  .badges .pill{display:inline-block;background:var(--pill);border:1px solid var(--line);
+    color:var(--mut);border-radius:999px;padding:2px 10px;font-size:12px;margin:0 6px 6px 0}
+  section{margin-top:44px;scroll-margin-top:16px}
+  h2{font-size:21px;margin:0 0 4px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h2 .n{color:var(--acc);font-size:13px;font-weight:600;margin-right:8px}
+  h3{font-size:16px;margin:24px 0 6px;color:var(--ink)}
+  p{max-width:78ch}
+  .lead{color:var(--mut)}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:13.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--mut);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  td.mono,th.mono{font-family:ui-monospace,monospace}
+  tr:hover td{background:var(--panel)}
+  code{background:var(--code);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12.5px}
+  pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:14px 16px;
+    overflow:auto;font-size:12.5px;line-height:1.5}
+  pre code{background:none;border:0;padding:0}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0}
+  .tag{display:inline-block;border-radius:5px;padding:0 7px;font-size:11px;font-weight:600;
+    border:1px solid transparent;white-space:nowrap}
+  .t-sub{background:rgba(187,154,247,.14);color:var(--acc4);border-color:rgba(187,154,247,.3)}
+  .t-hce{background:rgba(224,175,104,.14);color:var(--acc3);border-color:rgba(224,175,104,.3)}
+  .t-commit{background:rgba(158,206,106,.13);color:var(--acc2);border-color:rgba(158,206,106,.3)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:880px){.wrap{grid-template-columns:1fr}nav{display:none}.grid2{grid-template-columns:1fr}main{padding:28px 20px 80px}}
+  /* architecture diagram */
+  .arch{display:flex;flex-direction:column;gap:14px;margin:18px 0}
+  .layer{border:1px solid var(--line);border-radius:12px;padding:14px 16px;background:var(--panel)}
+  .layer .lh{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin-bottom:10px}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .box{flex:1 1 150px;min-width:140px;background:var(--panel2);border:1px solid var(--line);
+    border-radius:9px;padding:10px 12px}
+  .box b{display:block;font-size:13px;margin-bottom:3px}
+  .box small{color:var(--mut);font-size:11.5px;line-height:1.4;display:block}
+  .box.acc{border-color:rgba(122,162,247,.4)}
+  .box.acc2{border-color:rgba(158,206,106,.4)}
+  .box.acc3{border-color:rgba(224,175,104,.4)}
+  .arrow{text-align:center;color:var(--mut);font-size:18px;margin:-4px 0}
+  .note{color:var(--mut);font-size:13px;border-left:3px solid var(--acc);padding:2px 0 2px 12px;margin:12px 0}
+  footer{color:#5b6270;font-size:12px;margin-top:64px;border-top:1px solid var(--line);padding-top:18px}
+  .kpi{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0 0}
+  .kpi div{background:var(--panel2);border:1px solid var(--line);border-radius:9px;padding:8px 14px}
+  .kpi b{font-size:20px;color:var(--acc)} .kpi small{display:block;color:var(--mut);font-size:11px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav>
+  <h1>claude-system</h1>
+  <div class="sub mono">framework map</div>
+  <a href="#overview">Overview</a>
+  <a href="#bigpicture">The two layers</a>
+  <a href="#layout">Repo layout</a>
+  <div class="grp">The ~/.claude payload</div>
+  <a href="#claude">claude/ tree</a>
+  <a href="#skills">Skills (17)</a>
+  <a href="#hooks">Hooks (6)</a>
+  <a href="#rules">Rules &amp; CLAUDE.md</a>
+  <a href="#templates">Templates</a>
+  <div class="grp">Services</div>
+  <a href="#coordinator">Coordinator</a>
+  <a href="#dashboard">Dashboard</a>
+  <div class="grp">How it runs</div>
+  <a href="#lifecycle">Session lifecycle</a>
+  <a href="#install">Install &amp; operate</a>
+  <a href="#conventions">Conventions</a>
+</nav>
+
+<main>
+<header class="hero" id="overview">
+  <h1>claude-system</h1>
+  <p class="lead">A version-controlled <code>~/.claude/</code> framework, a resource
+  coordinator, and an internal dashboard — the machinery behind an agentic research
+  setup. This page maps <em>the framework itself</em>: what lives where, how the parts
+  talk, and how a session is governed end to end.</p>
+  <div class="badges">
+    <span class="pill mono">repo: ~/claude-system</span>
+    <span class="pill mono">remote: github.com/eschmitt88/claude-system</span>
+    <span class="pill">single source of truth</span>
+  </div>
+  <div class="kpi">
+    <div><b>17</b><small>skills</small></div>
+    <div><b>6</b><small>lifecycle hooks</small></div>
+    <div><b>5</b><small>coordinator CLIs</small></div>
+    <div><b>1</b><small>sqlite state.db</small></div>
+  </div>
+</header>
+
+<section id="bigpicture">
+  <h2><span class="n">01</span>The two layers</h2>
+  <p class="lead">The system is a <b>framework</b> plus the <b>instances</b> it scaffolds.
+  Only the framework lives in this repo. <code>~/.claude/</code> is <b>not</b> a separate
+  checkout — <code>install.sh</code> symlinks the load-bearing directories straight back
+  into <code>~/claude-system/claude/</code>, so editing either path edits the same file and
+  all of it is versioned here.</p>
+
+  <div class="arch">
+    <div class="layer">
+      <div class="lh">Layer 1 — the framework · <span class="mono">~/claude-system</span> (this repo)</div>
+      <div class="row">
+        <div class="box acc"><b>claude/</b><small>the ~/.claude payload: CLAUDE.md, settings.json, rules/, skills/, hooks/, templates/</small></div>
+        <div class="box acc2"><b>coordinator/</b><small>Python pkg over state.db — poller, policy, ccusage, 5 CLIs</small></div>
+        <div class="box acc3"><b>dashboard/</b><small>FastAPI + HTMX + SSE, LAN-only view of state.db + project files</small></div>
+        <div class="box"><b>scripts/ · install.sh</b><small>systemd units + idempotent bootstrap</small></div>
+      </div>
+    </div>
+    <div class="arrow">▼ &nbsp; <span class="mono" style="font-size:12px">install.sh symlinks</span></div>
+    <div class="layer">
+      <div class="lh">~/.claude/ — symlinks into Layer 1 (runtime state stays local, untracked)</div>
+      <div class="row">
+        <div class="box"><b>CLAUDE.md → · skills/ → · hooks/ → · rules/ → · templates/ → · settings.json →</b>
+          <small>symlinks to claude/*</small></div>
+        <div class="box"><b>state.db · sessions/ · .env</b><small>runtime — never committed</small></div>
+      </div>
+    </div>
+    <div class="arrow">▼ &nbsp; <span class="mono" style="font-size:12px">/new-project copies templates/project/</span></div>
+    <div class="layer">
+      <div class="lh">Layer 2 — the instances · <span class="mono">~/projects/research/&lt;slug&gt;</span> (each its own git repo)</div>
+      <div class="row">
+        <div class="box"><b>literature-curation</b><small>e.g. agentic-research — the hub others <code>@import</code> concepts from</small></div>
+        <div class="box"><b>ML-experiments (HCE)</b><small>e.g. dotaml-turbo — splits.yaml, budget.yaml, DVC, sealed test split</small></div>
+      </div>
+    </div>
+  </div>
+  <p class="note">This map is scoped to Layer 1. Layer 2 appears only as <em>what the
+  framework scaffolds and governs</em> — the instances are documented in their own repos.</p>
+</section>
+
+<section id="layout">
+  <h2><span class="n">02</span>Repo layout</h2>
+  <table>
+    <thead><tr><th class="mono">path</th><th>purpose</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">claude/CLAUDE.md</td><td>Durable cross-project principles (symlinked to <code>~/.claude/CLAUDE.md</code>).</td></tr>
+      <tr><td class="mono">claude/settings.json</td><td>Claude Code settings — hook wiring, permissions, effort level.</td></tr>
+      <tr><td class="mono">claude/rules/</td><td>Path-scoped rules auto-loaded by the harness (<code>evaluation.md</code> = HCE discipline).</td></tr>
+      <tr><td class="mono">claude/skills/</td><td>17 invocable slash-command skills, one <code>SKILL.md</code> contract each.</td></tr>
+      <tr><td class="mono">claude/hooks/</td><td>6 lifecycle shell hooks wired to harness events.</td></tr>
+      <tr><td class="mono">claude/templates/project/</td><td>The instance scaffold copied by <code>/new-project</code>.</td></tr>
+      <tr><td class="mono">coordinator/</td><td>Python package: <code>state.db</code> schema + writers/readers, hardware poller, admission policy, ccusage, CLIs.</td></tr>
+      <tr><td class="mono">dashboard/</td><td>FastAPI + HTMX + SSE app. Reads <code>state.db</code> + project files. LAN-only.</td></tr>
+      <tr><td class="mono">scripts/systemd/</td><td>systemd user units: hardware poller (+timer), dashboard.</td></tr>
+      <tr><td class="mono">install.sh</td><td>Idempotent bootstrap: symlinks, systemd units, backups. Safe to re-run.</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Runtime state — <code>state.db</code>, <code>sessions/</code>,
+  <code>.env</code>, <code>~/projects/*</code> — is deliberately <b>not</b> tracked.
+  <code>.gitignore</code> is strict on <code>*.db</code> and <code>.env</code>.</p>
+</section>
+
+<section id="claude">
+  <h2><span class="n">03</span>The <span class="mono">claude/</span> tree — the ~/.claude payload</h2>
+  <p class="lead">Everything the Claude Code harness loads at <code>~/.claude/</code> is one
+  of these six things. They are the framework's primary surface; the coordinator and
+  dashboard exist to serve them.</p>
+  <div class="grid2">
+    <div class="panel"><h3 style="margin-top:0">CLAUDE.md</h3>
+      <p>Durable principles that apply to every project: where things live (SN850X vs OS
+      drive), the git-as-memory model, the experiment folder contract, end-of-task
+      discipline, runtime discipline (worktrees, subagents), and monitoring of
+      long-running ML jobs. Kept terse; instance <code>CLAUDE.md</code> files refine it.</p></div>
+    <div class="panel"><h3 style="margin-top:0">settings.json</h3>
+      <p>Wires the six hooks to harness events, sets permissions (incl. allowed
+      <code>WebSearch</code>/<code>WebFetch</code>), effort level, and theme.</p></div>
+    <div class="panel"><h3 style="margin-top:0">rules/</h3>
+      <p>Currently <code>evaluation.md</code> — the Hidden Consistent Evaluation (HCE)
+      discipline. Opt-in by project shape; <code>respects:</code> frontmatter on a skill
+      declares the dependency.</p></div>
+    <div class="panel"><h3 style="margin-top:0">templates/project/</h3>
+      <p>The canonical instance: <code>CLAUDE.md</code>, <code>README.md</code>,
+      <code>budget.yaml</code>, <code>dvc.yaml</code>, <code>NOTES.md</code>,
+      <code>_meta/templates/</code>, and the <code>literature/ concepts/ mocs/ experiments/
+      raw/ journal/ docs/</code> skeleton.</p></div>
+  </div>
+</section>
+
+<section id="skills">
+  <h2><span class="n">04</span>Skills <span style="font-size:13px;color:var(--mut)">— 17 SKILL.md contracts</span></h2>
+  <p class="lead">Skills are the user-facing verbs. Each is a markdown contract loaded into
+  context on invocation. Three groups: the <b>experiment loop</b>, the <b>literature
+  pipeline</b>, and <b>hygiene/ops</b>.
+  <span class="tag t-sub">subagent</span> spawns a fresh subagent ·
+  <span class="tag t-hce">HCE</span> respects <code>evaluation.md</code> ·
+  <span class="tag t-commit">auto-commit</span> writes &amp; commits without a confirmation gate.</p>
+
+  <h3>Experiment loop — ideation → execution → iteration</h3>
+  <table>
+    <thead><tr><th class="mono">skill</th><th>role</th><th></th></tr></thead>
+    <tbody>
+      <tr><td class="mono">/propose</td><td>Strategic ideation from concepts + recent literature + recent experiments. Emits one proposal file. No code, no dvc.</td><td><span class="tag t-hce">HCE</span></td></tr>
+      <tr><td class="mono">/expand</td><td>Takes one proposal → N alternative implementations sharing the hypothesis.</td><td><span class="tag t-hce">HCE</span></td></tr>
+      <tr><td class="mono">/derive-experiment</td><td>Turns one literature note into an experiment proposal; back-links it into the note.</td><td></td></tr>
+      <tr><td class="mono">/new-experiment</td><td>Scaffolds <code>experiments/YYYY-MM-DD-&lt;slug&gt;/</code> (README, config.yaml, notes.qmd, log.md, metrics.json); copies splits if HCE.</td><td><span class="tag t-hce">HCE</span> <span class="tag t-commit">auto-commit</span></td></tr>
+      <tr><td class="mono">/implement</td><td>The MLE-ideator separation boundary — the <b>only</b> skill that spawns a subagent. Runs the experiment, captures metrics, writes Diagnostics, files the proposal under <code>_done/</code> or <code>_failed/</code>.</td><td><span class="tag t-sub">subagent</span> <span class="tag t-hce">HCE</span></td></tr>
+      <tr><td class="mono">/iterate</td><td>One propose→implement cycle per call; reads the last Diagnostics, picks the strongest candidate. <code>--chain N</code> runs unattended.</td><td><span class="tag t-hce">HCE</span></td></tr>
+      <tr><td class="mono">/ensemble</td><td>Combines N completed experiments on the same metric into a new ensemble experiment.</td><td><span class="tag t-hce">HCE</span></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Literature pipeline — discover → fetch → ingest → graph</h3>
+  <table>
+    <thead><tr><th class="mono">skill</th><th>role</th><th></th></tr></thead>
+    <tbody>
+      <tr><td class="mono">/discover</td><td>Web-grounded triage on a topic → one ranked candidates file in <code>raw/_candidates/</code>.</td><td><span class="tag t-commit">auto-commit</span></td></tr>
+      <tr><td class="mono">/digest</td><td>Cron-friendly sweep for fresh items on active concepts since the last digest; drops candidates. Never auto-ingests.</td><td></td></tr>
+      <tr><td class="mono">/fetch-paper</td><td>Downloads a paper/repo into immutable <code>raw/</code>, derives a citekey, chains into <code>/ingest</code>.</td><td><span class="tag t-commit">auto-commit</span></td></tr>
+      <tr><td class="mono">/ingest</td><td>Turns a <code>raw/</code> file into a literature note + concept updates + index/log; proposes a 0–5 relevance score; calls <code>/sync-imports</code>.</td><td><span class="tag t-commit">auto-commit</span></td></tr>
+      <tr><td class="mono">/sync-imports</td><td>Appends idempotent <code>used_by:</code> back-references to concepts that downstream projects <code>@import</code>.</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <h3>Hygiene &amp; ops</h3>
+  <table>
+    <thead><tr><th class="mono">skill</th><th>role</th><th></th></tr></thead>
+    <tbody>
+      <tr><td class="mono">/new-project</td><td>Scaffolds <code>~/projects/research/&lt;slug&gt;</code> from the template; <code>git init</code>, <code>dvc init</code>, <code>uv init</code>, first commit.</td><td></td></tr>
+      <tr><td class="mono">/lint</td><td>Knowledge-graph health check. Auto-detects research vs experiments mode and runs only applicable checks. HCE violations are hard failures.</td><td><span class="tag t-hce">HCE</span></td></tr>
+      <tr><td class="mono">/wrap</td><td>End-of-session discipline: appends Did/Findings/Next to <code>NOTES.md</code>, updates index/log, warns on placeholder rot.</td><td><span class="tag t-commit">auto-commit</span></td></tr>
+      <tr><td class="mono">/headroom</td><td>Sub-second resource snapshot — ccusage quota (5h block + reset-anchored weekly), hardware, job queue. Read-only.</td><td></td></tr>
+      <tr><td class="mono">/plan</td><td>Asks the coordinator whether a job should start now; returns admit/defer with reason. Call before any &gt;200k-token or GPU job.</td><td></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="hooks">
+  <h2><span class="n">05</span>Hooks <span style="font-size:13px;color:var(--mut)">— 6 scripts wired to lifecycle events</span></h2>
+  <p class="lead">Hooks are the framework's enforcement layer — discipline that doesn't rely
+  on the agent remembering. Wired in <code>settings.json</code>.</p>
+  <table>
+    <thead><tr><th>event</th><th class="mono">script</th><th>what it does</th></tr></thead>
+    <tbody>
+      <tr><td>SessionStart</td><td class="mono">session-start.sh</td><td>Primes the session (context/state at startup).</td></tr>
+      <tr><td>PreCompact</td><td class="mono">pre-compact.sh</td><td>Preserves load-bearing context before the harness compacts the window.</td></tr>
+      <tr><td>Stop</td><td class="mono">token_logger.sh</td><td>Writes a <code>token_events</code> row to <code>state.db</code> per turn (usage passed as argv, not stdin).</td></tr>
+      <tr><td>PostToolUse <span class="mono" style="font-size:11px">(Write)</span></td><td class="mono">status_emit.sh</td><td>Emits a status signal whenever a file is written.</td></tr>
+      <tr><td>PreToolUse</td><td class="mono">pretooluse_cap.sh</td><td>Safety net: blocks further tool calls once a declared token ceiling is exceeded. Backstop, not primary control.</td></tr>
+      <tr><td>SessionEnd</td><td class="mono">session-end.sh</td><td>Writes the daily journal, backstops <code>/wrap</code>, and (opt-in via <code>budget.yaml git.auto_push</code>) commits + pushes the project, retrying leftover unpushed commits.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="rules">
+  <h2><span class="n">06</span>Rules &amp; CLAUDE.md — the discipline spec</h2>
+  <p class="lead">Two prose layers govern agent behaviour without code.</p>
+  <div class="grid2">
+    <div class="panel"><h3 style="margin-top:0">CLAUDE.md (durable principles)</h3>
+      <p>Where artifacts live, git-as-memory, the experiment folder contract, end-of-task
+      <code>NOTES.md</code> discipline, worktrees for destructive runs, subagents for
+      high-volume narrow work, and how to monitor multi-hour ML jobs (launch with
+      <code>python -u</code>, poll every 10–30 min, halt on a <em>pattern</em> of 3+ bad
+      epochs).</p></div>
+    <div class="panel"><h3 style="margin-top:0">rules/evaluation.md (HCE)</h3>
+      <p>Hidden Consistent Evaluation prevents the autonomous loop from overfitting its own
+      signal. Three hard clauses: <b>(1)</b> <code>test/</code> is off-limits during search;
+      <b>(2)</b> two metric files per experiment — <code>metrics.json</code> (validation,
+      the search signal) vs <code>final_metrics.json</code> (held-out, written only at chain
+      end); <b>(3)</b> comparable experiments share one seeded split. Opt-in by project
+      shape; <code>/lint</code> is the backstop.</p></div>
+  </div>
+</section>
+
+<section id="templates">
+  <h2><span class="n">07</span>Templates — the instance scaffold</h2>
+  <p class="lead">The framework's output is a project. <code>templates/project/</code> is the
+  canonical shape <code>/new-project</code> copies, after which a thin instance
+  <code>CLAUDE.md</code> and <code>.claude/rules/</code> refine the durable principles.</p>
+  <pre><code>templates/project/
+├── CLAUDE.md          # thin orientation; refines ~/.claude/CLAUDE.md
+├── README.md          # public-facing layout guide
+├── budget.yaml        # wall-time / token / disk ceilings + model roles + git.auto_push
+├── dvc.yaml · params.yaml · Makefile · NOTES.md
+├── _meta/             # index.md, log.md, templates/{concept,experiment,paper,post,repo}.md
+├── literature/  concepts/  mocs/      # the knowledge graph
+├── experiments/                       # YYYY-MM-DD-&lt;slug&gt;/ runs (+ _proposals/)
+├── raw/                               # immutable sources — read-only after ingest
+├── docs/decisions/                    # lightweight ADRs
+└── journal/                           # hook-written daily session files</code></pre>
+  <p class="note">Two archetypes emerge from the same scaffold: <b>literature-curation</b>
+  projects (large knowledge graph, no <code>splits.yaml</code>; e.g. the
+  <code>agentic-research</code> hub) and <b>ML-experiments</b> projects (HCE on,
+  <code>budget.yaml</code> + DVC + sealed test split; e.g. <code>dotaml-turbo</code>).</p>
+</section>
+
+<section id="coordinator">
+  <h2><span class="n">08</span>Coordinator — one sqlite DB as source of truth</h2>
+  <p class="lead">A single <code>~/.claude/state.db</code> tracks resources so skills can make
+  admit/defer decisions instead of guessing. The Python package wraps it with writers,
+  readers, a hardware poller, an admission policy, and five CLIs.</p>
+
+  <div class="grid2">
+    <div class="panel"><h3 style="margin-top:0">state.db tracks</h3>
+      <table style="margin:0">
+        <tr><td class="mono">token_events</td><td>per-turn usage from the Stop hook</td></tr>
+        <tr><td class="mono">hardware_samples</td><td>CPU/RAM/disk/GPU @ 30s cadence</td></tr>
+        <tr><td class="mono">jobs</td><td>declared work + est. cost + status</td></tr>
+        <tr><td class="mono">decisions</td><td>admit/defer log for policy review</td></tr>
+      </table>
+    </div>
+    <div class="panel"><h3 style="margin-top:0">modules</h3>
+      <table style="margin:0">
+        <tr><td class="mono">db / init_db</td><td>connection + schema</td></tr>
+        <tr><td class="mono">writers / readers</td><td>insert events; query windows</td></tr>
+        <tr><td class="mono">poller</td><td>hardware sampler (systemd timer)</td></tr>
+        <tr><td class="mono">policy</td><td><code>can_start()</code> admission logic</td></tr>
+        <tr><td class="mono">ccusage</td><td>accurate quota from <code>projects/*.jsonl</code></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h3>CLIs (console scripts in the coordinator venv)</h3>
+  <table>
+    <thead><tr><th class="mono">command</th><th>backs</th><th>does</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">claude-coordinator-status</td><td>/headroom</td><td>ccusage quota + hardware + queue snapshot</td></tr>
+      <tr><td class="mono">claude-coordinator-plan</td><td>/plan</td><td>runs <code>policy.can_start</code> → admit/defer</td></tr>
+      <tr><td class="mono">claude-coordinator-job</td><td>skills</td><td>declare / update a job in the queue</td></tr>
+      <tr><td class="mono">claude-coordinator-poll</td><td>systemd</td><td>one hardware sample → state.db</td></tr>
+      <tr><td class="mono">claude-coordinator-init</td><td>install</td><td>create the schema</td></tr>
+    </tbody>
+  </table>
+  <p class="note"><b>ccusage</b> shells out to the community <code>ccusage</code> CLI to read
+  per-message usage. The weekly window is reset-anchored (Mon 17:00 local) and
+  well-calibrated; the 5h block boundary drifts, so trust the projection/burn-rate over the
+  headline 5h %.</p>
+</section>
+
+<section id="dashboard">
+  <h2><span class="n">09</span>Dashboard — LAN-only window into state.db</h2>
+  <p class="lead">FastAPI + HTMX + server-sent events at
+  <code>http://aiserver.local:8080</code>. Reads <code>state.db</code> and project files;
+  auto-refreshes via SSE. Runs as a systemd user unit. A TTL cache fronts hot filesystem
+  scans.</p>
+  <table>
+    <thead><tr><th class="mono">route</th><th>view</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">/</td><td>Live now — loop sessions, hardware gauges, quota meters, token sparkline.</td></tr>
+      <tr><td class="mono">/queue</td><td>Coordinator job queue (running + queued + recent completed).</td></tr>
+      <tr><td class="mono">/projects-hub</td><td>Discovery across all research projects.</td></tr>
+      <tr><td class="mono">/project/&lt;name&gt;</td><td>Per-project cycle table + Diagnostics.</td></tr>
+      <tr><td class="mono">/project/&lt;name&gt;/{concepts,literature,candidates}</td><td>Knowledge-graph browsing (markdown rendered).</td></tr>
+      <tr><td class="mono">/projects/&lt;name&gt;/dashboard/…</td><td>Serves a project's own static dashboard assets.</td></tr>
+      <tr><td class="mono">/events</td><td>SSE stream driving live refresh.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="lifecycle">
+  <h2><span class="n">10</span>Session lifecycle — how the parts talk</h2>
+  <p class="lead">A single session weaves skills, hooks, and the coordinator together:</p>
+  <ol>
+    <li><b>SessionStart</b> hook primes context.</li>
+    <li>Before a heavy job, a skill calls <b>/plan</b> → <code>policy.can_start</code> reads
+      hardware + quota from <code>state.db</code> → <b>admit / defer</b>.</li>
+    <li>On admit, the skill optionally declares a <b>job</b> (visible in <code>/headroom</code>
+      and the dashboard queue). <b>/implement</b> spawns the subagent that runs it.</li>
+    <li>Each turn, the <b>Stop</b> hook logs <code>token_events</code>; the
+      <b>PreToolUse</b> cap halts a runaway loop past its ceiling. A systemd timer polls
+      hardware every 30s.</li>
+    <li>The <b>dashboard</b> reflects all of this live over SSE.</li>
+    <li><b>/wrap</b> (backstopped by the <b>SessionEnd</b> hook) writes Did/Findings/Next to
+      <code>NOTES.md</code>, the journal, and — if the project opts in — commits and pushes.</li>
+  </ol>
+  <p class="note">Division of labour: <b>skills</b> = the agent's verbs · <b>hooks</b> =
+  non-negotiable discipline · <b>coordinator</b> = the shared resource truth · <b>dashboard</b>
+  = the human's read-only window.</p>
+</section>
+
+<section id="install">
+  <h2><span class="n">11</span>Install &amp; operate</h2>
+  <pre><code>git clone git@github.com:eschmitt88/claude-system.git ~/claude-system
+cd ~/claude-system &amp;&amp; ./install.sh        # idempotent: symlinks + systemd units + backups</code></pre>
+  <p><code>install.sh</code> symlinks <code>claude/{rules,skills,hooks,templates}</code> and
+  <code>claude/{CLAUDE.md,settings.json}</code> into <code>~/.claude/</code> (backing up
+  anything it replaces), then installs the systemd user units. Required env vars live in
+  <code>~/.claude/.env</code> (copied from <code>.env.example</code>; never overwritten).</p>
+  <table>
+    <thead><tr><th class="mono">systemd user unit</th><th>role</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">claude-hw-poller.service / .timer</td><td>Samples hardware into <code>state.db</code> every 30s.</td></tr>
+      <tr><td class="mono">claude-dashboard.service</td><td>Runs the FastAPI dashboard on the LAN.</td></tr>
+    </tbody>
+  </table>
+  <p class="note">Because <code>claude/</code> is symlinked into <code>~/.claude/</code>,
+  editing either path edits the same file — but always <b>commit from
+  <code>~/claude-system/</code></b> so history stays coherent.</p>
+</section>
+
+<section id="conventions">
+  <h2><span class="n">12</span>Conventions that hold everywhere</h2>
+  <div class="grid2">
+    <div class="panel"><h3 style="margin-top:0">Git is the memory layer</h3>
+      <p>Every durable fact lives in a tracked file — plain Markdown with flat YAML
+      frontmatter. Auto-memory is a hint, not a home. Recent skills commit directly rather
+      than gating on confirmation, because <code>git revert</code> makes it reversible.</p></div>
+    <div class="panel"><h3 style="margin-top:0">raw/ is immutable</h3>
+      <p>Snapshots of papers, repos, and web captures. The agent reads it; nothing writes to
+      it after ingest. Re-ingest instead of editing.</p></div>
+    <div class="panel"><h3 style="margin-top:0">Storage split</h3>
+      <p>Datasets, checkpoints, venvs, HF cache → SN850X under <code>~/projects/</code>.
+      <code>~/.claude/</code> holds only config, skills, hooks, templates.</p></div>
+    <div class="panel"><h3 style="margin-top:0">End every session with /wrap</h3>
+      <p>Did / Findings / Next in <code>NOTES.md</code>; decisions in
+      <code>docs/decisions/NNNN-*.md</code>. Enforced by skill <em>and</em> SessionEnd hook —
+      not by asking nicely.</p></div>
+  </div>
+</section>
+
+<footer>
+  <p>Generated system map for <span class="mono">claude-system</span> · framework layer only.
+  The instances it scaffolds (<span class="mono">~/projects/research/*</span>) are documented
+  in their own repos. Source of truth for everything above:
+  <span class="mono">~/claude-system</span>.</p>
+</footer>
+</main>
+</div>
+</body>
+</html>

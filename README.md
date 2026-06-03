@@ -3,6 +3,10 @@
 Version-controlled `~/.claude/` framework plus a resource coordinator and
 internal dashboard for an agentic research setup.
 
+📐 **[System map](https://eschmitt88.github.io/claude-system/)** — a visual,
+framework-level tour of every part and how they connect (source:
+[`docs/index.html`](docs/index.html)).
+
 ## What's here
 
 | Path | Purpose |
