@@ -1,6 +1,6 @@
 ---
 name: lint
-description: Weekly knowledge-graph health check. Surfaces orphan literature notes, high-relevance papers without follow-up, dead wikilinks, concepts without sources, stale proposals, experiments missing diagnostics, costly sessions without insight, stale candidates/expansions, unanchored diagnostic claims, and any test/ access during the search phase. Report-only — does not auto-fix. Hard failure on HCE-rule violations.
+description: Knowledge-graph health check. Auto-detects project mode (research vs experiments) from filesystem shape and runs only the checks that apply. Always-on checks cover orphans, dead wikilinks, sourceless concepts, MoC candidates, stale candidates. Experiment-mode adds stale proposals, missing diagnostics, costly sessions without insight, stale expansions, unanchored claims. HCE-mode adds test/ access detection. Report-only — does not auto-fix. Hard failure on HCE-rule violations.
 respects:
   - ~/.claude/rules/evaluation.md
 ---
@@ -8,84 +8,129 @@ respects:
 # lint
 
 Surface knowledge-graph rot and HCE-rule violations. All checks are
-report-only **except** #12 (test/ access during search), which is a
-hard failure that should block a chain from continuing.
+report-only **except** the HCE access check, which is a hard failure
+that should block a chain from continuing.
 
-## Checks
+## Project mode detection
 
-Run each check over the active project and print a short report grouped
-by category. Do not auto-fix — the user decides what to clean up.
+Before running any check, decide the project's mode from the filesystem:
+
+- **experiments** mode — `experiments/` exists and contains at least
+  one dated folder matching `YYYY-MM-DD-*/`. (Empty `experiments/`,
+  or only `experiments/_proposals/`, does NOT count.)
+- **research** mode — anything else. Literature curation, concept
+  building, MoC stewardship. No experiments to check against.
+
+Then check HCE triggers (only meaningful in experiments mode):
+
+- **hce_active** = experiments mode AND any of:
+  `splits.yaml` at project root, an experiment subfolder named `test/`
+  or with a `test/` symlink, or `evaluation_mode: hce` in the project
+  `CLAUDE.md` / `budget.yaml`.
+
+Report the detected mode at the top of the output so the user knows
+what was skipped:
+
+```
+MODE: research   (no experiments/YYYY-MM-DD-*/ folders detected)
+```
+or
+```
+MODE: experiments (hce_active=true)
+```
+
+## Always-on checks (both modes)
 
 ### 1. Orphan literature notes
 
-Files under `literature/**/*.md` whose frontmatter `related_experiments:`
-list is empty or missing. Suggestion: either link to an experiment or
-lower `relevance:` to 1.
+Files under `literature/**/*.md` with **no engagement** anywhere in
+the knowledge graph. A note counts as engaged if **any** of:
+
+- frontmatter `related_experiments:` is non-empty;
+- frontmatter `related_concepts:` is non-empty;
+- the `## Follow-up` section has at least one non-placeholder bullet
+  (placeholder = literal `- ...` left from the template);
+- the note's path appears as a `[[literature/papers/<slug>]]` link
+  inside any `concepts/*.md` or `mocs/*.md` body;
+- the note's slug appears in any `concepts/*.md` frontmatter
+  `sources:` or `source_papers:` list.
+
+Suggestion: either link the note into the graph or lower `relevance:`
+to 1.
 
 ### 2. High-relevance papers with no follow-up
 
-Literature notes with `relevance >= 4` and an empty `## Follow-up` section
-(or no follow-up bullets). These are the highest-leverage items to act on.
+Literature notes with `relevance >= 4` and no engagement by the
+definition above. These are the highest-leverage items to act on.
+
+In **experiments mode**, also flag notes where engagement exists only
+via concepts/MoCs but `related_experiments:` is empty — the paper is
+in the graph but hasn't shaped a run.
 
 ### 3. Dead wikilinks
 
-Any `[[target]]` or `[[target|alias]]` reference whose target file does
-not exist anywhere under the project. Print the referencing file and
+Any `[[target]]` or `[[target|alias]]` reference whose target file
+does not exist anywhere under the project. Print referencing file and
 line number.
 
-### 4. Concepts with no sources
+### 4. Concepts without sources
 
-Files under `concepts/*.md` whose frontmatter `sources:` list is empty.
-These are claims with no provenance — either attach sources or demote to
-`status: seedling` if already mature.
+Files under `concepts/*.md` whose frontmatter `sources:` list is
+empty AND whose `source_papers:` list is also empty. These are claims
+with no provenance — either attach sources or demote to `status: seedling`
+if already mature.
 
 ### 5. MoC candidates
 
-Clusters of ≥5 concepts sharing a tag where no `mocs/<tag>.md` exists yet.
-Suggest creating the MoC.
+Clusters of ≥5 concepts sharing a tag where no `mocs/<tag>.md` exists
+yet. Suggest creating the MoC.
 
-### 6. Stale proposals
+### 6. Stale candidates
+
+Files under `raw/_candidates/` older than **14 days**. `/discover` or
+`/digest` found these items and the user never curated them.
+Suggestion: `/fetch-paper` the entries worth keeping, delete the
+file, or re-run `/discover` to refresh.
+
+### 7. High-relevance literature stale >30d
+
+Files under `literature/**/*.md` with `relevance >= 4`, no engagement
+(definition from check 1), and an `added:` date more than **30 days**
+old. Stricter cousin of check 2.
+
+## Experiments-mode checks
+
+Skip all of these in research mode.
+
+### 8. Stale proposals
 
 Files under `experiments/_proposals/*.md` (not `_done/` or `_failed/`)
 whose frontmatter `status: proposed` and whose `date:` is more than
 **14 days** old. Suggestion: implement, rewrite, or move to
 `_proposals/_failed/` with a reason.
 
-### 7. Experiments missing diagnostics
+### 9. Experiments missing diagnostics
 
-Files under `experiments/*/README.md` where either:
+Files under `experiments/YYYY-MM-DD-*/README.md` where either:
 
 - the `## Diagnostics` section is missing entirely, or
 - the `intended_effect_confirmed` field is empty / still contains the
-  template placeholder (`<yes | no | partial>` or similar).
+  template placeholder.
 
 Skip experiments whose frontmatter is `status: running` and whose
 `date:` is within the last 24 hours. Also surface any
 `TODO: diagnostics incomplete` lines that the SessionEnd hook has
 appended to `_meta/log.md`.
 
-### 8. High-relevance literature with no follow-up after 30 days
-
-Files under `literature/**/*.md` with `relevance >= 4`, an empty
-`related_experiments:` list, and an `added:` date more than **30 days**
-old. Stricter cousin of check #1.
-
-### 9. Costly sessions without insight
+### 10. Costly sessions without insight
 
 Parse `_meta/token_log.ndjson`. For every session whose
-`input_tokens + output_tokens + cache_creation_tokens > 500_000`, find
-the experiment(s) that session touched (match on
-`_meta/status.ndjson` slug entries within the session window, or fall
-back to the session's tool-call log if available). If any of those
-experiments has an empty / missing Diagnostics section, surface it —
-significant budget was burned without producing structured insight.
-
-### 10. Stale candidates
-
-Files under `raw/_candidates/` older than **14 days**. `/discover` or
-`/digest` found these items and the user never curated them.
-Suggestion: `/fetch-paper` the entries worth keeping, delete the file,
-or re-run `/discover` to refresh.
+`input_tokens + output_tokens + cache_creation_tokens > 500_000`,
+find the experiment(s) that session touched (match on
+`_meta/status.ndjson` slug entries within the session window). If
+any of those experiments has an empty / missing Diagnostics section,
+surface it — significant budget was burned without producing
+structured insight.
 
 ### 11. Stale expansions
 
@@ -96,8 +141,8 @@ Suggestion: implement, move to `_failed/` with a reason, or delete.
 
 ### 12. Unanchored diagnostic claims
 
-For every `experiments/*/README.md` Diagnostics section, check each
-field that asserts a concrete effect:
+For every `experiments/YYYY-MM-DD-*/README.md` Diagnostics section,
+check each field that asserts a concrete effect:
 
 - `intended_effect_confirmed: yes` or `partial`
 - `delta_from_prior` with a numeric metric delta
@@ -112,10 +157,14 @@ For each such claim, require a **citation anchor** — any of:
 - a `[[literature/...]]` or `[[concepts/...]]` wikilink
 - a `notes.qmd:cell-label` reference
 
-Anchor detection is lightweight regex — if the claim line has none of
-the above, flag it. Motivated by Kosmos (arXiv 2511.02824): anchors are
-what separate an agent's claims from hallucinated summaries of its own
-work.
+Anchor detection is lightweight regex — if the claim line has none
+of the above, flag it. Motivated by Kosmos (arXiv 2511.02824):
+anchors are what separate an agent's claims from hallucinated
+summaries of its own work.
+
+## HCE-mode check
+
+Skip unless `hce_active` is true.
 
 ### 13. `test/` access during search — HARD FAILURE
 
@@ -128,11 +177,11 @@ a. **DVC deps**: parse `dvc.lock` (or `dvc.yaml` when `.lock` is
    consumer of `test/` under the HCE rule
    (`~/.claude/rules/evaluation.md`).
 
-b. **Session tool logs**: for each experiment, look for a saved tool-call
-   log (`experiments/<slug>/log.md` plus any `_meta/status.ndjson`
-   entries tagged to that slug) and grep for `Read`, `Glob`, or `Grep`
-   calls whose path argument begins with `test/`. Anything found is a
-   hard failure.
+b. **Session tool logs**: for each experiment, look for a saved
+   tool-call log (`experiments/<slug>/log.md` plus any
+   `_meta/status.ndjson` entries tagged to that slug) and grep for
+   `Read`, `Glob`, or `Grep` calls whose path argument begins with
+   `test/`. Anything found is a hard failure.
 
 Output violations as `HCE VIOLATION (HARD)`. Do not downgrade to a
 warning.
@@ -140,6 +189,8 @@ warning.
 ## Output format
 
 ```
+MODE: research   (no experiments/YYYY-MM-DD-*/ folders detected)
+
 ORPHANS (N)
   literature/papers/foo.md
 
@@ -155,37 +206,27 @@ CONCEPTS WITHOUT SOURCES (N)
 MoC CANDIDATES (N)
   tag=embeddings (7 concepts) — suggest mocs/embeddings.md
 
-STALE PROPOSALS (N)
-  experiments/_proposals/2026-03-30-foo.md  age=22d
-
-MISSING DIAGNOSTICS (N)
-  experiments/2026-04-10-bar/README.md  no ## Diagnostics section
-
-HIGH-RELEVANCE LITERATURE STALE >30d (N)
-  literature/papers/qux.md  relevance=5  added=2026-03-10
-
-COSTLY SESSIONS WITHOUT INSIGHT (N)
-  session=abc123 tokens=712_450 touched=experiments/2026-04-18-foo/ — no Diagnostics
-
 STALE CANDIDATES (N)
   raw/_candidates/2026-03-20-retrieval.md  age=35d
 
-STALE EXPANSIONS (N)
-  experiments/_proposals/_expansions/ema-downweight/variant-a.md  age=9d (no /implement)
-
-UNANCHORED DIAGNOSTIC CLAIMS (N)
-  experiments/2026-04-18-foo/README.md:62  intended_effect_confirmed: yes — <no anchor>
-
-HCE VIOLATION (HARD) (N)
-  experiments/2026-04-20-bar/dvc.lock  stage=eval deps include test/targets.parquet
-  experiments/2026-04-19-baz/log.md  Read test/labels.json during search phase
+HIGH-RELEVANCE LITERATURE STALE >30d (N)
+  literature/papers/qux.md  relevance=5  added=2026-03-10
 ```
+
+In experiments mode the report continues with stale proposals,
+missing diagnostics, costly sessions, stale expansions, and
+unanchored claims sections; with `hce_active`, the HCE VIOLATION
+section follows.
 
 ## Notes
 
 - Read-only. Does not modify files.
 - Run weekly or before a `/wrap` at the end of a big push.
+- In research-only projects, the report should be short and focus
+  on knowledge-graph hygiene; if it's noisy, the broadened
+  engagement definition is the lever to revisit.
 - HCE violations should be treated as blocking: do not proceed with
   further `/iterate` cycles until they are resolved.
-- Subagents may be useful when the literature set is large — delegate
-  the scan, keep the synthesis and reporting in the main agent.
+- Subagents may be useful when the literature set is large —
+  delegate the scan, keep the synthesis and reporting in the main
+  agent.
