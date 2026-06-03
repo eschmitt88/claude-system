@@ -44,8 +44,9 @@ def _sample_gpu() -> dict:
         return {}
 
 
-def _sample_disk(path: str = "/mnt/projects") -> dict:
-    p = Path(path)
+def _sample_disk(path: str | None = None) -> dict:
+    from . import config
+    p = Path(path or config.DISK_MONITOR_PATH)
     if not p.exists():
         p = Path.home()
     du = shutil.disk_usage(str(p))

@@ -15,6 +15,20 @@ BACKUP_DIR="$CLAUDE_DIR/backups/$(date +%Y%m%d-%H%M%S)"
 
 mkdir -p "$CLAUDE_DIR"
 
+# Canonical location. Skills and hooks reference ~/claude-system by path.
+# If this repo was cloned elsewhere, point ~/claude-system at it so those
+# references resolve regardless of where you cloned.
+CANONICAL="$HOME/claude-system"
+if [ "$REPO_ROOT" != "$CANONICAL" ]; then
+  if [ -L "$CANONICAL" ] || [ ! -e "$CANONICAL" ]; then
+    ln -sfn "$REPO_ROOT" "$CANONICAL"
+    echo "  [link]   $CANONICAL → $REPO_ROOT (canonical path for skills/hooks)"
+  else
+    echo "  [warn]   $CANONICAL exists and is not this clone — skills expect the"
+    echo "           repo reachable at ~/claude-system. Move/clone there, or symlink it."
+  fi
+fi
+
 # Symlink helper. If the target exists and isn't already pointing at the
 # repo copy, move it aside before linking.
 link() {
@@ -46,17 +60,31 @@ done
 if [ ! -e "$CLAUDE_DIR/.env" ]; then
   if [ -f "$REPO_ROOT/.env.example" ]; then
     cp "$REPO_ROOT/.env.example" "$CLAUDE_DIR/.env"
-    echo "=> Seeded $CLAUDE_DIR/.env from .env.example (fill in NTFY_TOPIC)."
+    echo "=> Seeded $CLAUDE_DIR/.env from .env.example (edit to configure)."
   fi
 fi
+
+# Resolve machine config from ~/.claude/.env (shell syntax), so we can bake
+# concrete values into the systemd units. Unset keys fall back to defaults
+# that match coordinator/config.py.
+if [ -f "$CLAUDE_DIR/.env" ]; then
+  set -a; . "$CLAUDE_DIR/.env"; set +a
+fi
+PROJECTS_ROOT_VAL="${PROJECTS_ROOT:-$HOME/projects/research}"
+if [ -n "${DISK_MONITOR_PATH:-}" ]; then DISK_MONITOR_PATH_VAL="$DISK_MONITOR_PATH"
+elif [ -d "$HOME/projects" ]; then DISK_MONITOR_PATH_VAL="$HOME/projects"
+else DISK_MONITOR_PATH_VAL="$HOME"; fi
+DASHBOARD_BIND_VAL="${CLAUDE_DASHBOARD_BIND:-0.0.0.0:8080}"
 
 # Coordinator venv + state.db initialization
 if command -v uv >/dev/null 2>&1; then
   echo "=> Provisioning coordinator venv"
   (cd "$REPO_ROOT/coordinator" && uv venv --python 3.12 .venv 2>/dev/null || true)
   (cd "$REPO_ROOT/coordinator" && source .venv/bin/activate && uv pip install -e . 2>&1 | tail -1) || true
-  # Initialize state.db schema (idempotent).
-  "$REPO_ROOT/coordinator/.venv/bin/python" -m coordinator.init_db || true
+  # Initialize state.db schema (idempotent). Use the installed console
+  # script, not `python -m` — the latter puts the repo root on sys.path,
+  # where the bare ./coordinator dir shadows the installed package.
+  "$REPO_ROOT/coordinator/.venv/bin/claude-coordinator-init" || true
 fi
 
 # Dashboard venv
@@ -73,8 +101,11 @@ mkdir -p "$USER_UNIT_DIR"
 for unit in claude-dashboard.service claude-hw-poller.service claude-hw-poller.timer; do
   src="$REPO_ROOT/scripts/systemd/$unit"
   if [ -f "$src" ]; then
-    # Substitute REPO_ROOT in the unit file.
-    sed "s|{{REPO_ROOT}}|$REPO_ROOT|g; s|{{HOME}}|$HOME|g" "$src" > "$USER_UNIT_DIR/$unit"
+    # Substitute REPO_ROOT + resolved config into the unit file.
+    sed "s|{{REPO_ROOT}}|$REPO_ROOT|g; s|{{HOME}}|$HOME|g; \
+         s|{{PROJECTS_ROOT}}|$PROJECTS_ROOT_VAL|g; \
+         s|{{DISK_MONITOR_PATH}}|$DISK_MONITOR_PATH_VAL|g; \
+         s|{{DASHBOARD_BIND}}|$DASHBOARD_BIND_VAL|g" "$src" > "$USER_UNIT_DIR/$unit"
     echo "  [unit]   $USER_UNIT_DIR/$unit"
   fi
 done
@@ -89,5 +120,14 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 
 echo "=> install.sh done"
+echo
+echo "   Configuration (edit $CLAUDE_DIR/.env, then re-run ./install.sh):"
+echo "     PROJECTS_ROOT        = $PROJECTS_ROOT_VAL"
+echo "     DISK_MONITOR_PATH    = $DISK_MONITOR_PATH_VAL"
+echo "     CLAUDE_DASHBOARD_BIND= $DASHBOARD_BIND_VAL"
+echo
+echo "   Verify:"
+echo "     $REPO_ROOT/coordinator/.venv/bin/claude-coordinator-status"
+echo "     systemctl --user status claude-dashboard.service claude-hw-poller.timer"
+echo "     dashboard → http://${DASHBOARD_BIND_VAL/0.0.0.0/localhost}"
 echo "   Backups (if any) are in $BACKUP_DIR"
-echo "   Fill in $CLAUDE_DIR/.env before first use."

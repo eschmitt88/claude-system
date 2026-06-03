@@ -10,11 +10,10 @@ from typing import Any, Optional
 import markdown as md_lib
 import yaml
 
+from coordinator.config import PROJECTS_ROOT  # noqa: F401  (machine-config)
 from coordinator.readers import tokens_per_day  # noqa: F401  (re-exported)
 
 from .cache import ttl_cache
-
-PROJECTS_ROOT = Path.home() / "projects" / "research"
 
 # arxiv abs/pdf URLs: arxiv.org/abs/YYMM.NNNNN  →  20YY-MM
 _ARXIV_RE = re.compile(r"arxiv\.org/(?:abs|pdf)/(\d{2})(\d{2})\.\d{4,6}")

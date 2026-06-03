@@ -17,8 +17,9 @@ from .policy import Job, can_start
 
 
 def _find_project_root(project: str) -> Path | None:
-    # Try ~/projects/research/<project>/ as a convention.
-    root = Path.home() / "projects" / "research" / project
+    # Try <PROJECTS_ROOT>/<project>/ as a convention (config-driven).
+    from . import config
+    root = config.PROJECTS_ROOT / project
     if root.exists():
         return root
     return None
