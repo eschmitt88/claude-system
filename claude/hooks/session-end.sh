@@ -77,12 +77,29 @@ if [ -n "$exp_dir" ] && [ -f "$exp_dir/README.md" ] && [ -f "$root/_meta/log.md"
   fi
 fi
 
-# Optional auto-push to the project's git remote. Opt-in only:
-# requires project.yaml at the project root containing `auto_push: true`.
+# Optional auto-push to the project's git remote. Opt-in only.
+# Two opt-in schemas supported:
+#   1. Legacy: project.yaml at project root with `auto_push: true` at top level.
+#   2. Current: budget.yaml at project root with `git.auto_push: true` (nested).
 # Skipped when any experiment is still `status: running` — mid-run state
 # is rarely worth pushing.
-if [ -f "$root/project.yaml" ] && [ -d "$root/.git" ]; then
-  auto_push="$(grep -E '^auto_push:[[:space:]]*true' "$root/project.yaml" 2>/dev/null || true)"
+if [ -d "$root/.git" ]; then
+  auto_push=""
+  if [ -f "$root/project.yaml" ]; then
+    auto_push="$(grep -E '^auto_push:[[:space:]]*true' "$root/project.yaml" 2>/dev/null || true)"
+  fi
+  if [ -z "$auto_push" ] && [ -f "$root/budget.yaml" ]; then
+    auto_push="$(python3 -c '
+import sys, yaml
+try:
+    with open(sys.argv[1]) as f:
+        cfg = yaml.safe_load(f) or {}
+    if cfg.get("git", {}).get("auto_push") is True:
+        print("yes")
+except Exception:
+    pass
+' "$root/budget.yaml" 2>/dev/null || true)"
+  fi
   if [ -n "$auto_push" ]; then
     # Skip if any experiment README has status: running in its frontmatter.
     running=""
@@ -99,19 +116,65 @@ if [ -f "$root/project.yaml" ] && [ -d "$root/.git" ]; then
       printf '%s %s auto_push skipped (experiment mid-run: %s)\n' \
         "$date_local" "$time_local" "$running" >> "$root/_meta/log.md"
     else
-      # Only push when there are actual uncommitted changes.
+      # Two reasons to engage: uncommitted local work, OR unpushed
+      # commits left over from a prior failed push (e.g. transient DNS
+      # failure). The retry path is the important one — without it, a
+      # failed push leaves HEAD ahead of origin forever unless new
+      # work happens to ride along.
+      have_changes=0
       if ! git -C "$root" diff --quiet --ignore-submodules --exit-code 2>/dev/null \
          || ! git -C "$root" diff --cached --quiet --ignore-submodules --exit-code 2>/dev/null \
          || [ -n "$(git -C "$root" ls-files --others --exclude-standard 2>/dev/null)" ]; then
-        msg="session: $(date +%F) $(hostname)"
-        if git -C "$root" add -A 2>/dev/null \
-           && git -C "$root" commit -m "$msg" 2>/dev/null \
-           && git -C "$root" push 2>/dev/null; then
-          printf '%s %s auto_push committed+pushed "%s"\n' \
-            "$date_local" "$time_local" "$msg" >> "$root/_meta/log.md"
+        have_changes=1
+      fi
+
+      have_unpushed=0
+      if git -C "$root" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' >/dev/null 2>&1; then
+        ahead="$(git -C "$root" rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo 0)"
+        [ "${ahead:-0}" -gt 0 ] && have_unpushed=1
+      fi
+
+      if [ "$have_changes" -eq 1 ] || [ "$have_unpushed" -eq 1 ]; then
+        # Append-with-header to a rolling err file. Truncating on every
+        # attempt destroyed the diagnostic trail across intermittent
+        # failures — now you can read the whole history.
+        push_err="$HOME/.claude/hooks/auto-push.err"
+        printf '\n=== %s %s %s ===\n' "$date_local" "$time_local" "$(basename "$root")" >> "$push_err" 2>/dev/null || true
+
+        commit_ok=1
+        if [ "$have_changes" -eq 1 ]; then
+          msg="session: $(date +%F) $(hostname)"
+          if ! { git -C "$root" add -A 2>>"$push_err" \
+                 && git -C "$root" commit -m "$msg" 2>>"$push_err"; }; then
+            commit_ok=0
+          fi
+        fi
+
+        # Always attempt push if we got here. BatchMode=yes makes ssh
+        # fail-fast on locked credentials instead of hanging on a
+        # passphrase prompt and getting killed by the hook timeout.
+        # `timeout 30` is belt-and-braces for any other network hang.
+        # Log only failures. On success the commit hash is the audit
+        # record — appending a success line dirties the tree and the
+        # next session-end would have stale state to commit.
+        push_ok=1
+        if [ "$commit_ok" -eq 1 ]; then
+          if ! GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5" \
+               timeout 30 git -C "$root" push 2>>"$push_err"; then
+            push_ok=0
+          fi
         else
-          printf '%s %s auto_push attempted but add/commit/push failed\n' \
-            "$date_local" "$time_local" >> "$root/_meta/log.md"
+          push_ok=0
+        fi
+
+        if [ "$push_ok" -ne 1 ]; then
+          if [ "$have_changes" -eq 0 ] && [ "$have_unpushed" -eq 1 ]; then
+            reason="retry of unpushed commits failed"
+          else
+            reason="attempted but failed"
+          fi
+          printf '%s %s auto_push %s (see %s)\n' \
+            "$date_local" "$time_local" "$reason" "$push_err" >> "$root/_meta/log.md"
         fi
       fi
     fi

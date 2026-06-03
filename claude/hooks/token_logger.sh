@@ -55,10 +55,13 @@ if [ -n "$project_root" ]; then project_slug="$(basename "$project_root")"; fi
 
 COORD_PY="$HOME/claude-system/coordinator/.venv/bin/python"
 if [ -x "$COORD_PY" ]; then
-  printf '%s' "$usage" | "$COORD_PY" - "${session_id:-unknown}" "$project_slug" "$ts" <<'PYEOF' || true
+  # Pass usage as CLI argv[4], not via stdin. The previous form
+  # collided pipe-stdin with heredoc-stdin: the heredoc redirect
+  # won, so `sys.stdin.read()` saw "" and every field defaulted to 0.
+  "$COORD_PY" - "${session_id:-unknown}" "$project_slug" "$ts" "$usage" <<'PYEOF' || true
 import json, sys
 from coordinator.writers import insert_token_event
-payload = json.loads(sys.stdin.read() or "{}")
+payload = json.loads(sys.argv[4] or "{}")
 insert_token_event(
     session_id=sys.argv[1] or "unknown",
     project=sys.argv[2] or None,
