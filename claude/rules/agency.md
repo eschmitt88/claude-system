@@ -62,6 +62,17 @@ every few units of work), not just once — quota and GPU state move.
   (`hardware.gpu_free`), run as `--chain` within the `budget.yaml`
   ceilings instead of pausing per cycle.
 
+## Persist the work — push at the end of every autonomous burst
+
+The per-repo Pages site reads the **live** GitHub tree, so autonomous work
+is invisible until it is pushed. After any autonomous burst in a `max`
+repo — a `/digest` auto-advance, a chained `/iterate`, a batch of
+`/ingest`s — **commit and `git push`** so the changes land on GitHub and
+the Pages site updates. Never leave committed-but-unpushed work at the end
+of an autonomous run; the SessionEnd auto-push is a backstop, not the
+primary mechanism. Push at each natural boundary (e.g. after each ingested
+paper), not only once at the very end, so progress is visible as it lands.
+
 ## Hard limits that still bind under `max`
 
 Autonomy is bounded, not unbounded:
