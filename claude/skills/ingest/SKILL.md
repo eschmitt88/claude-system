@@ -30,8 +30,36 @@ it raises.
    - `source:` → the raw path.
    - `added:` → today's date.
    - `title`/`name`, `authors`, `year`, `venue`, `url` where visible.
-   - `relevance:` left at 0 for the user to set.
+   - `relevance:` → propose a 0–5 score per the rubric below, with a
+     one-line justification in the `## Follow-up` section under the
+     heading `**Relevance:**`. The user overrides in the diff if they
+     disagree.
    - `tags:` suggested from content; user can prune.
+
+   **Relevance rubric** (project-specific; read the active project's
+   `CLAUDE.md` "What this project is about" section to ground the
+   scoring — the rubric below is calibrated for the agentic-research
+   meta project and other projects should restate the rubric in their
+   own CLAUDE.md if they want different semantics):
+
+   - **5** — directly seeds a new concept that downstream projects
+     will import; or provides the canonical evidence anchoring an
+     existing load-bearing concept.
+   - **4** — strengthens an existing concept with material new
+     evidence/ablations, or seeds a concept likely to be imported soon.
+   - **3** — useful prior art on an active theme but doesn't shift
+     any concept; cite-worthy.
+   - **2** — adjacent / comparative; informs framing but not
+     architecture.
+   - **1** — tangential; recorded for completeness.
+   - **0** — reserved for "unscored" (do not auto-assign 0; if the
+     paper is genuinely tangential, score 1).
+
+   Auto-scoring is best-effort. The skill should propose, not impose:
+   the score and justification land in the same diff batch the user
+   confirms. If the active project has no clear mission statement
+   in its `CLAUDE.md`, default to `relevance: 0` and tell the user
+   the rubric could not be applied.
 
 4. **Candidate concepts**: extract 1–5 atomic ideas the source raises.
    For each, check `concepts/` for an existing file by name (case- and
@@ -49,8 +77,20 @@ it raises.
    changes to meta-project concept files are part of the same
    confirmation batch.
 
-8. **Show the diff** for every file proposed/modified and wait for
-   confirmation.
+8. **Write all proposed/modified files and commit.** Agentic
+   workflow — no confirmation gate. After writing everything in
+   the batch (literature note + concept updates + index + log +
+   cross-project back-references), run:
+
+   ```sh
+   git add -A
+   git commit -m "ingest YYYY-MM-DD: <raw-path> → <literature note>"
+   ```
+
+   Then print the commit hash. Rationale: git is the memory
+   layer per `CLAUDE.md`, and commits are reversible
+   (`git revert`), so the default is to commit. The user can
+   amend or revert after the fact.
 
 ## Cross-project import back-reference — call `/sync-imports`
 

@@ -1,6 +1,6 @@
 ---
 name: wrap
-description: End-of-session discipline. Reads tail of NOTES.md to avoid duplicate date headings, appends today's ## YYYY-MM-DD entry with Did/Findings/Next subsections, updates _meta/index.md and _meta/log.md, shows diff, waits for confirmation.
+description: End-of-session discipline. Reads tail of NOTES.md to avoid duplicate date headings, appends today's dated entry with Did/Findings/Next subsections, updates _meta/index.md and _meta/log.md, shows diff, waits for confirmation.
 ---
 
 # wrap
@@ -17,6 +17,30 @@ Close a work session by committing Did/Findings/Next to `NOTES.md`.
    date (`YYYY-MM-DD` local) already has a heading, append under the
    existing heading's subsections rather than creating a duplicate
    `## YYYY-MM-DD`.
+
+   Also scan recently-touched experiment READMEs for placeholder rot:
+   for any `experiments/YYYY-MM-DD-<slug>/README.md` that was modified
+   in this session OR whose frontmatter says `status: done` or
+   `status: abandoned`, grep the body for placeholder phrases:
+   `Fill in after the run`, `Fill after run`, `(post-run)`, `TBD.`
+   (with terminal period, to avoid false-positives on "TBD" as part
+   of prose), or a section heading followed only by blank lines.
+
+   If any placeholder is found, emit a clear soft warning to the
+   user in chat:
+
+   > ⚠ Experiment README has placeholder body content:
+   > - experiments/<slug>/README.md: `## Result` still says "Fill in after the run"
+   > - experiments/<other>/README.md: `## Diagnostics` still says "TBD"
+   >
+   > Consider populating before wrap (`/wrap` will proceed anyway).
+
+   This is INFORMATIONAL — do NOT block the wrap. The user opted
+   into soft-warning behavior; respect that. But populating the
+   bodies before continuing is the right thing to do when the
+   experiment actually completed; otherwise the wrap commits a
+   `status: done` README with an empty `## Result` section, which
+   future readers (or `/lint`) will then have to chase down.
 
 3. **Draft the entry** based on the conversation so far:
 
@@ -73,9 +97,20 @@ Close a work session by committing Did/Findings/Next to `NOTES.md`.
 6. **Append to `_meta/log.md`**: one line,
    `YYYY-MM-DD HH:MM wrap <one-line-summary>`.
 
-7. **Show the diff** of all modified files and wait for the user to
-   confirm before writing. Do not auto-commit to git — the user decides
-   when to commit.
+7. **Write the changes and commit.** This is an agentic workflow:
+   skip the human confirmation gate. After writing all the files,
+   run:
+
+   ```sh
+   git add -A
+   git commit -m "wrap YYYY-MM-DD: <one-line summary from step 6>"
+   ```
+
+   Then print the new commit hash. Rationale: git is the memory
+   layer per `CLAUDE.md`, and commits are reversible (`git revert`
+   or `git reset --soft HEAD~1`), so the default is to commit
+   rather than leave the working tree dirty. The user can amend,
+   split, or revert after the fact if needed.
 
 ## Why enforce this
 
