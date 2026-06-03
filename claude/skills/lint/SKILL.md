@@ -91,10 +91,12 @@ prompt for the user to promote by hand.)
 
 ### 6. Stale candidates
 
-Files under `raw/_candidates/` older than **14 days**. `/discover` or
-`/digest` found these items and the user never curated them.
-Suggestion: `/fetch-paper` the entries worth keeping, delete the
-file, or re-run `/discover` to refresh.
+Files **directly** under `raw/_candidates/` (not the `_done/` archive)
+older than **14 days**. `/discover` or `/digest` found these items and
+the user never curated them. Suggestion: run `/curate` (which ingests the
+keepers, records declines with reasons, and moves the file to
+`raw/_candidates/_done/`). A file under `_done/` is resolved and not
+counted here.
 
 ### 7. High-relevance literature stale >30d
 

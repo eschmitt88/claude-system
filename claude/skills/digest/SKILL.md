@@ -88,6 +88,12 @@ would be searched without writing).
      asked. `/promote-moc` self-declines when nothing is genuinely ripe
      (e.g. the cluster is already covered by an existing MoC), so it is
      safe to call every run.
+   - **Close the loop**: this candidate file is now curated, so resolve it
+     via the `/curate` lifecycle — append a `## Curation` section with each
+     item's disposition and move the file to `raw/_candidates/_done/` so it
+     stops counting as uncurated. If any candidates were left un-ingested
+     (verdict downgraded mid-run, or below the count cap), leave the file
+     in place for the next run or a `/curate` pass instead of archiving.
 
 ## Constraints
 
