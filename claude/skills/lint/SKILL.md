@@ -83,7 +83,11 @@ if already mature.
 ### 5. MoC candidates
 
 Clusters of ≥5 concepts sharing a tag where no `mocs/<tag>.md` exists
-yet. Suggest creating the MoC.
+yet, and whose concepts are not already covered by an existing MoC.
+Suggest creating the MoC with `/promote-moc <theme>`. (In `agency: max`
+repos `/digest` already runs `/promote-moc` after each ingest burst, so
+this check is mostly a backstop there; in `standard` repos it's the
+prompt for the user to promote by hand.)
 
 ### 6. Stale candidates
 

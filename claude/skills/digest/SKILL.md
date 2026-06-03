@@ -82,6 +82,12 @@ would be searched without writing).
      ceiling is hit.
    - Log the auto-advance:
      `YYYY-MM-DD HH:MM digest-autoingest n=<k> verdict=<v>`.
+   - **Then keep the graph navigable**: run `/promote-moc` (auto-detect).
+     Ingesting fresh concepts can tip a theme over the >=5 threshold; in a
+     `max` repo, promote the Map of Content rather than waiting to be
+     asked. `/promote-moc` self-declines when nothing is genuinely ripe
+     (e.g. the cluster is already covered by an existing MoC), so it is
+     safe to call every run.
 
 ## Constraints
 

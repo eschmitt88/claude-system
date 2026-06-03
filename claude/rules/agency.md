@@ -61,6 +61,12 @@ every few units of work), not just once — quota and GPU state move.
 - **`/iterate`** — under `max` and a non-`hold` verdict with the GPU free
   (`hardware.gpu_free`), run as `--chain` within the `budget.yaml`
   ceilings instead of pausing per cycle.
+- **`/promote-moc`** — after an ingest burst adds or links concepts, run
+  `/promote-moc` (auto-detect) so a newly-ripe cluster becomes a Map of
+  Content without waiting to be asked. It promotes only genuinely ripe,
+  un-mapped clusters (>=5 related concepts not already in a MoC) and
+  declines redundant ones — keep that restraint; do not manufacture thin
+  MoCs just because agency is `max`.
 
 ## Persist the work — push at the end of every autonomous burst
 
