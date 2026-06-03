@@ -43,8 +43,8 @@ it raises.
        `["Google DeepMind", "MIT"]`), read from the paper's first page /
        author block. The single biggest "who's behind this" signal.
        Affiliations live in the PDF, **not** the arXiv abstract page, so
-       read the PDF's first 1–2 pages. If the Read tool can't render the
-       PDF (no poppler in this environment), fall back to
+       read the PDF's first 1–2 pages (the Read tool's `pages` param;
+       poppler is installed). If a PDF still won't render, fall back to
        `uv run --with pypdf python -c "import pypdf;print(pypdf.PdfReader('<path>').pages[0].extract_text())"`.
        Don't leave `institutions: []` when the PDF has the affiliations.
      - `peer_reviewed:` → `true` if published at a peer-reviewed venue,
