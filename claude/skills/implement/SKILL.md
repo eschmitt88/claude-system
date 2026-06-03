@@ -38,14 +38,14 @@ that is allowed to spawn a subagent.
   2. the project's `budget.yaml` field `models.implementer`
   3. the main-session model (inherited)
 
-  The default on this box is a capability-matching split: Opus 4.7
-  (ideator, main session) + Opus 4.6 (implementer, subagent). Both
-  cost the same on a Max plan, so the rationale is capability, not
-  price — Opus 4.7's adaptive thinking earns its keep on strategic
-  ideation, Opus 4.6 is the proven coder following a clear spec.
-  Cheaper configs (Haiku 4.5, Sonnet 4.6) and future releases slot in
-  by editing `budget.yaml` alone — no skill rewrite. Motivated by
-  R&D-Agent's hybrid-backend pattern.
+  The template default is `opus` for both roles — a floating alias that
+  resolves to the latest Opus release, so the box tracks new Opus
+  versions without edits. Pass the slug straight through to the Agent
+  tool's `model` parameter, which accepts `opus`/`sonnet`/`haiku` aliases
+  as well as concrete IDs (e.g. `claude-opus-4-8`). A capability- or
+  cost-split config (e.g. a `haiku`/`sonnet` implementer, or a pinned
+  version for reproducibility) slots in by editing `budget.yaml` alone —
+  no skill rewrite. Motivated by R&D-Agent's hybrid-backend pattern.
 
 ## Steps
 
