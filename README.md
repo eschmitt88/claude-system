@@ -67,11 +67,17 @@ optional and falls back to the default below. Edit, then re-run
 | `PROJECTS_ROOT` | `~/projects/research` | Where research projects live. |
 | `DISK_MONITOR_PATH` | `~/projects` (else `~`) | Volume sampled for free disk in `/headroom` + dashboard — point at your data drive. |
 | `CLAUDE_DASHBOARD_BIND` | `0.0.0.0:8080` | Dashboard `host:port`. Use `127.0.0.1:8080` for localhost-only. |
-| `DEFAULT_IDEATOR_MODEL` / `DEFAULT_IMPLEMENTER_MODEL` | `claude-opus-4-7` / `4-6` | Model roles copied into a new project's `budget.yaml`. |
 | `NTFY_TOPIC` | — | [ntfy.sh](https://ntfy.sh/) topic for notifications. |
 
 These resolve through `coordinator/config.py`, so the code works even with
 an empty `.env`; the file only overrides defaults.
+
+**Model roles** are a *per-project* setting, not machine config: each
+project's `budget.yaml` sets `models.ideator` / `models.implementer`. The
+template defaults both to `opus` — a floating alias that resolves to the
+latest Opus release, so it tracks new versions without edits. Pin a concrete
+slug (e.g. `claude-opus-4-8`) for reproducibility, or use `haiku`/`sonnet`
+for a cheaper implementer.
 
 ### Verify
 
