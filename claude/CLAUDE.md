@@ -75,6 +75,25 @@ DVC tracks data and model artifacts. Git tracks code, configs, and notes.
 - Worktrees go under `~/projects/research/<slug>/.worktrees/`, not
   alongside the main checkout.
 
+## Monitoring long-running ML jobs (>30 min)
+
+Multi-hour training/build jobs are not fire-and-forget. The LLM can
+detect off-the-rails runs faster than a human — use it.
+
+- **Launch with `python -u`** so stdout isn't block-buffered (default
+  `nohup`-redirected Python buffers ~8 KB → silent training looks like
+  a hang).
+- **Poll the log every 10-30 min.** Tail, check metric trajectory,
+  check process state (CPU/GPU util, RSS), scan `journalctl` for
+  kernel events.
+- **Halt on a PATTERN of 3+ consecutive bad epochs**, not a single
+  reading. Bad signals: train loss increasing (anti-learning), val
+  metric stuck at random baseline, NaN/Inf, multi-task weights
+  collapsing to single-task-dominant, GPU 0% util + CPU 100% sustained,
+  kernel events (OOM/RCU/MCE).
+- **Document the kill** in the experiment's `log.md` AND project
+  `_meta/log.md`: what signal triggered, what the log showed.
+
 ## Tools of record
 
 - `git` for code and prose.
