@@ -11,7 +11,7 @@ Ask the coordinator whether a proposed job should start now or wait.
 
 Call `/plan` before `/implement`, `/iterate`, `/ingest`, `/digest`, or
 any loop that spends >200k tokens or touches GPU. For cheap local
-operations (file edits, small reads, `/wrap`, `/status`) skip it —
+operations (file edits, small reads, `/wrap`, `/headroom`) skip it —
 `/plan` is overhead for small jobs.
 
 ## Arguments
@@ -55,7 +55,7 @@ Before calling, estimate:
    "when GPU frees up"), and stop.
 
 5. **On admit, declare the job** (optional but recommended — it shows
-   up in `/status` as running):
+   up in `/headroom` as running):
 
    ```bash
    JOB_ID=$(~/claude-system/coordinator/.venv/bin/claude-coordinator-job \

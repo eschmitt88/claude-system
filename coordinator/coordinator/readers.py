@@ -1,4 +1,4 @@
-"""Read helpers for /status, /plan, and the dashboard."""
+"""Read helpers for /headroom, /plan, and the dashboard."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -62,6 +62,27 @@ def recent_completed_jobs(limit: int = 20) -> list[dict]:
             (limit,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+def tokens_per_day(days: int = 7) -> list[int]:
+    """One bucket per UTC day, oldest → newest. Used for the home sparkline."""
+    out: list[int] = []
+    today = _now_utc().date()
+    with connect() as c:
+        for d in range(days - 1, -1, -1):
+            day = today - timedelta(days=d)
+            since = datetime.combine(day, datetime.min.time(), tzinfo=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            until = datetime.combine(day, datetime.max.time(), tzinfo=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            row = c.execute(
+                """
+                SELECT COALESCE(SUM(input_tokens + output_tokens + cache_creation_tokens), 0) AS t
+                FROM token_events
+                WHERE timestamp >= ? AND timestamp <= ?
+                """,
+                (since, until),
+            ).fetchone()
+            out.append(int(row["t"]))
+    return out
 
 
 def running_job_for_project(project: str, kind: Optional[str] = None) -> Optional[dict]:

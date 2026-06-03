@@ -10,7 +10,7 @@ internal dashboard for an agentic research setup.
 | `claude/CLAUDE.md` | Durable user instructions (symlinked to `~/.claude/CLAUDE.md`). |
 | `claude/settings.json` | Claude Code settings (hooks, permissions). |
 | `claude/rules/` | Scoped rules auto-loaded by path (e.g. `evaluation.md` = HCE discipline). |
-| `claude/skills/` | Invocable slash-command skills (`/propose`, `/implement`, `/iterate`, `/status`, …). |
+| `claude/skills/` | Invocable slash-command skills (`/propose`, `/implement`, `/iterate`, `/headroom`, …). |
 | `claude/hooks/` | Lifecycle hooks (`SessionStart`, `Stop` = token logger, `PreToolUse` = safety net). |
 | `claude/templates/` | Project and note templates copied by `/new-project` / `/ingest`. |
 | `coordinator/` | Python package. `state.db` schema + writers, hardware poller, policy (`can_start`). |
@@ -62,7 +62,7 @@ A single sqlite database at `~/.claude/state.db` tracks:
 - **Job queue** — declared jobs + estimated resource cost + status.
 - **Decisions** — admit/defer log for policy review.
 
-Skills consult the coordinator via `/status` and `/plan`. Long-running
+Skills consult the coordinator via `/headroom` and `/plan`. Long-running
 skills (`/implement`, `/iterate`, `/ingest`, `/digest`) declare their
 job to the queue and honor policy verdicts. A PreToolUse hook is the
 safety net, not the primary control.

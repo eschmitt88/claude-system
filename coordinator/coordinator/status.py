@@ -1,4 +1,4 @@
-"""`claude-coordinator-status` CLI. Fast summary for /status skill.
+"""`claude-coordinator-status` CLI. Fast summary for /headroom skill.
 
 Prints:
 - Claude token usage over the trailing 5h and 7d windows (state.db totals).
@@ -12,8 +12,10 @@ from __future__ import annotations
 
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
+from . import ccusage
 from .readers import (
     latest_hardware_sample,
     queued_jobs,
@@ -38,18 +40,30 @@ def _fmt_pct(v):
     return f"{v:.0f}%" if v is not None else "n/a"
 
 
+def _fmt_usd(v):
+    return f"${v:.2f}" if v is not None else "n/a"
+
+
 def render(as_json: bool = False) -> str:
-    five_h = tokens_in_last(5 * 3600)
-    seven_d = tokens_in_last(7 * 24 * 3600)
-    hw = latest_hardware_sample()
-    queued = queued_jobs(limit=10)
-    completed = recent_completed_jobs(limit=5)
+    # ccusage calls are the slowest part (~0.4s each) — run them concurrently.
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        f_block = ex.submit(ccusage.active_block)
+        f_7d = ex.submit(ccusage.weekly_anchored)
+        five_h = tokens_in_last(5 * 3600)
+        seven_d = tokens_in_last(7 * 24 * 3600)
+        hw = latest_hardware_sample()
+        queued = queued_jobs(limit=10)
+        completed = recent_completed_jobs(limit=5)
+        cc_block = f_block.result()
+        cc_7d = f_7d.result()
 
     if as_json:
         return json.dumps(
             {
                 "tokens_5h": five_h,
                 "tokens_7d": seven_d,
+                "ccusage_active_block": cc_block,
+                "ccusage_weekly": cc_7d,
                 "hardware": hw,
                 "running_and_queued": queued,
                 "recent_completed": completed,
@@ -60,19 +74,66 @@ def render(as_json: bool = False) -> str:
         )
 
     out = []
-    out.append("=== Claude quota (sum of observed Stop-hook events) ===")
-    out.append(
-        f"  last 5h: {_fmt_tokens(five_h['total'])} total  "
-        f"(in {_fmt_tokens(five_h['input_tokens'])} / out {_fmt_tokens(five_h['output_tokens'])} / "
-        f"cache_read {_fmt_tokens(five_h['cache_read_tokens'])})"
-    )
-    out.append(
-        f"  last 7d: {_fmt_tokens(seven_d['total'])} total  "
-        f"(in {_fmt_tokens(seven_d['input_tokens'])} / out {_fmt_tokens(seven_d['output_tokens'])} / "
-        f"cache_read {_fmt_tokens(seven_d['cache_read_tokens'])})"
-    )
-    out.append("  note: Anthropic exposes no API for true rolling-window quota;")
-    out.append("        these are accumulated locally. Use ccusage for reset times.")
+    if cc_block or cc_7d:
+        out.append("=== Claude quota (via ccusage — reads ~/.claude/projects/*.jsonl) ===")
+        if cc_block:
+            pct = cc_block.get("pct_vs_max20x_limit")
+            pct_str = f" ({pct:.1f}% of Max-20x est.)" if pct is not None else ""
+            rem = cc_block.get("remaining_minutes")
+            rem_str = f"~{rem // 60}h {rem % 60}m left" if rem is not None else "active"
+            out.append(
+                f"  5h block: {_fmt_tokens(cc_block['tokens'])} tokens  "
+                f"{_fmt_usd(cc_block.get('cost_usd'))}{pct_str} — {rem_str}"
+            )
+            burn = cc_block.get("burn_tokens_per_min")
+            proj = cc_block.get("projection_tokens")
+            proj_pct = None
+            if proj and cc_block.get("max20x_limit_tokens"):
+                proj_pct = 100.0 * proj / cc_block["max20x_limit_tokens"]
+            if burn is not None:
+                proj_str = (
+                    f", projected {_fmt_tokens(int(proj))} ({proj_pct:.0f}%)" if proj else ""
+                )
+                out.append(f"    burn rate: {_fmt_tokens(int(burn))} tok/min{proj_str}")
+            pct_hist = cc_block.get("pct_vs_historical_max")
+            hist = cc_block.get("historical_max_tokens")
+            if hist and pct_hist is not None:
+                out.append(
+                    f"    vs. your own history: {pct_hist:.1f}% of max 5h-block "
+                    f"({_fmt_tokens(int(hist))})"
+                )
+        else:
+            out.append("  5h block: no active block (no usage in current window)")
+        if cc_7d:
+            pct_w = cc_7d.get("pct_vs_max20x_limit")
+            pct_w_str = f" ({pct_w:.1f}% of Max-20x est.)" if pct_w is not None else ""
+            out.append(
+                f"  weekly: {_fmt_tokens(cc_7d['tokens'])} tokens  "
+                f"{_fmt_usd(cc_7d.get('cost_usd'))}{pct_w_str}"
+            )
+            out.append(
+                f"    window: {cc_7d.get('window_start')} → {cc_7d.get('window_end')} "
+                f"({cc_7d.get('n_blocks', 0)} blocks)"
+            )
+        out.append("  note: weekly % is reset-anchored (since Mon 17:00 local) and")
+        out.append("        well-calibrated (2026-05-22 → 10.1% matches claude.ai 10%).")
+        out.append("        5h % is approximate: ccusage's block boundary drifts up")
+        out.append("        to ~1h from Anthropic's session boundary, so it can")
+        out.append("        underestimate the true session %.")
+    else:
+        out.append("=== Claude quota (sum of observed Stop-hook events) ===")
+        out.append(
+            f"  last 5h: {_fmt_tokens(five_h['total'])} total  "
+            f"(in {_fmt_tokens(five_h['input_tokens'])} / out {_fmt_tokens(five_h['output_tokens'])} / "
+            f"cache_read {_fmt_tokens(five_h['cache_read_tokens'])})"
+        )
+        out.append(
+            f"  last 7d: {_fmt_tokens(seven_d['total'])} total  "
+            f"(in {_fmt_tokens(seven_d['input_tokens'])} / out {_fmt_tokens(seven_d['output_tokens'])} / "
+            f"cache_read {_fmt_tokens(seven_d['cache_read_tokens'])})"
+        )
+        out.append("  note: ccusage not installed — falling back to Stop-hook accumulator.")
+        out.append("        Run `npm i -g ccusage` for per-message accuracy.")
 
     out.append("")
     out.append("=== Hardware (latest sample) ===")

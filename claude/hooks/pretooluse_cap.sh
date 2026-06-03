@@ -6,7 +6,7 @@
 # running total for this session has already exceeded it, emit a blocking
 # decision to halt.
 #
-# Safety net only — the primary controls are /status and /plan consulted
+# Safety net only — the primary controls are /headroom and /plan consulted
 # by the agent. This hook exists so a runaway loop can't drain the quota
 # past a declared ceiling.
 #

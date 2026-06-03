@@ -123,7 +123,7 @@ async def _refresh_snapshot() -> None:
         asyncio.to_thread(latest_hardware_sample),
         asyncio.to_thread(tokens_in_last, 5 * 3600),
         asyncio.to_thread(ccusage.active_block),
-        asyncio.to_thread(ccusage.rolling_7d),
+        asyncio.to_thread(ccusage.weekly_anchored),
     )
     loops = await _tmux_loops_async()
     _snapshot = {
