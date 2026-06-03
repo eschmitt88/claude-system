@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
@@ -383,6 +384,58 @@ def render_markdown(text: str, project_name: str) -> str:
         text,
         extensions=["extra", "sane_lists", "tables", "fenced_code", "toc"],
     )
+
+
+def _rel_age(dt: datetime) -> str:
+    s = (datetime.now(timezone.utc) - dt).total_seconds()
+    if s < 3600:
+        return f"{max(1, int(s // 60))}m ago"
+    if s < 86400:
+        return f"{int(s // 3600)}h ago"
+    if s < 86400 * 14:
+        return f"{int(s // 86400)}d ago"
+    return dt.date().isoformat()
+
+
+@ttl_cache(seconds=20)
+def project_activity(name: str, commit_limit: int = 30, session_limit: int = 8) -> dict:
+    """Recent git commits + parsed NOTES.md sessions (Did/Findings/Next) for a project."""
+    root = PROJECTS_ROOT / name
+    commits: list[dict] = []
+    if (root / ".git").exists():
+        try:
+            out = subprocess.run(
+                ["git", "-C", str(root), "log", f"-{commit_limit}",
+                 "--pretty=format:%h\x1f%cI\x1f%s"],
+                capture_output=True, text=True, timeout=5, check=False,
+            ).stdout
+            for line in out.splitlines():
+                parts = line.split("\x1f")
+                if len(parts) != 3:
+                    continue
+                sha, iso, subj = parts
+                try:
+                    ago = _rel_age(datetime.fromisoformat(iso))
+                except ValueError:
+                    ago = ""
+                commits.append({"sha": sha, "subject": subj, "ago": ago})
+        except Exception:
+            pass
+
+    sessions: list[dict] = []
+    notes = root / "NOTES.md"
+    if notes.exists():
+        text = notes.read_text(errors="ignore")
+        for part in re.split(r"\n(?=## )", text):
+            m = re.match(r"^##\s+(.+)$", part, re.M)
+            if not m or not re.match(r"\d{4}-\d{2}-\d{2}", m.group(1).strip()):
+                continue
+            body = re.sub(r"^##\s+.+\n?", "", part, count=1)
+            sessions.append({"heading": m.group(1).strip(),
+                             "html": render_markdown(body, name)})
+        sessions = list(reversed(sessions))[:session_limit]
+
+    return {"commits": commits, "sessions": sessions}
 
 
 @ttl_cache(seconds=20)

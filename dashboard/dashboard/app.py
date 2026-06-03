@@ -39,6 +39,7 @@ from .projects import (
     list_concepts,
     list_literature,
     list_projects,
+    project_activity,
     project_cycles,
     project_dashboard_dir,
     project_status,
@@ -279,6 +280,15 @@ def project(request: Request, name: str):
                 "diagnostics": diag,
             }
         ),
+    )
+
+
+@app.get("/project/{name}/activity", response_class=HTMLResponse)
+def project_activity_view(request: Request, name: str):
+    return TEMPLATES.TemplateResponse(
+        request,
+        "activity.html",
+        _ctx({"active": "activity", "project": name, **project_activity(name)}),
     )
 
 

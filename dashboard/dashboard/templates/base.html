@@ -43,6 +43,7 @@
     <nav class="subnav">
       <span class="subnav-label">{{ project }}</span>
       <a href="/project/{{ project }}" class="{% if active == 'overview' %}active{% endif %}">Overview</a>
+      <a href="/project/{{ project }}/activity" class="{% if active == 'activity' %}active{% endif %}">Activity</a>
       <a href="/project/{{ project }}/candidates" class="{% if active == 'candidates' %}active{% endif %}">Candidates</a>
       <a href="/project/{{ project }}/literature" class="{% if active == 'literature' %}active{% endif %}">Literature</a>
       <a href="/project/{{ project }}/concepts" class="{% if active == 'concepts' %}active{% endif %}">Concepts</a>
