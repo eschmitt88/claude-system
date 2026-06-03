@@ -6,7 +6,7 @@ A single sqlite database at ~/.claude/state.db is the source of truth for:
 - Job queue (declared work + estimated cost + status)
 - Decisions log (admit/defer)
 
-Skills consult the coordinator via /status and /plan; long-running
+Skills consult the coordinator via /headroom and /plan; long-running
 skills declare jobs before spending tokens.
 """
 from __future__ import annotations
