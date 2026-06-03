@@ -57,6 +57,39 @@ The `agentic-research` project is the meta-hub: `concepts/` files are
 `@import`ed by downstream projects, and `/sync-imports` appends
 `used_by:` back-references.
 
+### Standalone GitHub presence (per-project Pages)
+
+Every project scaffolded from the template ships
+`docs/index.html` — a **zero-build, convention-driven viewer** of its
+knowledge graph (literature / concepts / MoCs / experiments / candidates
+/ decisions). It is byte-for-byte identical across repos: it auto-detects
+`owner/repo` from the Pages URL, reads the live file tree in one GitHub
+API call, and pulls file bodies from the `raw` CDN. No build step, no
+regeneration, no pre-commit hook — it reflects the repo as it stands on
+each page load.
+
+The automated process for any repo following the layout:
+
+1. The template already contains `docs/index.html` (edit the template
+   copy to update every project's viewer at once).
+2. The repo must be **public** (GitHub Pages on a private repo needs a
+   paid plan). `/new-project` creates public repos by default
+   (`--private` to opt out).
+3. Enable Pages from the `/docs` folder — `/new-project` does this
+   automatically; by hand it is one call:
+   ```sh
+   gh api -X POST repos/<owner>/<repo>/pages \
+     -f "source[branch]=main" -f "source[path]=/docs"
+   ```
+4. The site is live at `https://<owner>.github.io/<repo>/` within ~1–2 min.
+
+The framework's own map (this repo) lives the same way at
+[`docs/index.html`](docs/index.html) →
+<https://eschmitt88.github.io/claude-system/>.
+
+Private projects skip Pages and are browsed via the internal dashboard
+instead, which renders the same directory convention.
+
 ### Coordinator (Phase 6, Part 3)
 
 A single sqlite database at `~/.claude/state.db` tracks:
