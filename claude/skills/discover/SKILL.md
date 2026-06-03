@@ -67,11 +67,22 @@ stale; the web is not.
    - reason: <one sentence on why this made the cut for this project>
    ```
 
-5. **Show the diff** for the single new file and wait for
-   confirmation.
+5. **Write the triage file.** Agentic workflow — no confirmation
+   gate.
 
 6. **Append to `_meta/log.md`**:
    `YYYY-MM-DD HH:MM discover <topic-slug> n=<count>`.
+
+7. **Commit.** After writing the triage file and the log line, run:
+
+   ```sh
+   git add -A
+   git commit -m "discover YYYY-MM-DD: <topic-slug> n=<count>"
+   ```
+
+   Then print the commit hash. Rationale: git is the memory
+   layer per `CLAUDE.md`, and commits are reversible
+   (`git revert`).
 
 ## What this skill does NOT do
 

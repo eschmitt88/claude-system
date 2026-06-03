@@ -83,7 +83,17 @@ folder convention.
 
 6. **Append to `_meta/log.md`**: `YYYY-MM-DD HH:MM new-experiment <slug>`.
 
-7. **Show the diff and wait for confirmation** before writing.
+7. **Write all scaffold files and commit.** Agentic workflow —
+   no confirmation gate. After writing the folder + files, run:
+
+   ```sh
+   git add -A
+   git commit -m "new-experiment YYYY-MM-DD-<slug>: scaffold"
+   ```
+
+   Then print the commit hash. Rationale: git is the memory
+   layer per `CLAUDE.md`, and commits are reversible
+   (`git revert`), so the default is to commit.
 
 ## Notes
 

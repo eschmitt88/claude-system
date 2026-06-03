@@ -64,6 +64,22 @@ input leaves the filesystem unchanged the second time.
 7. **Append to `_meta/log.md`**:
    `YYYY-MM-DD HH:MM fetch-paper <input> → <raw-path>`.
 
+8. **Commit the raw fetch.** Agentic workflow — no confirmation
+   gate. After the chained `/ingest` completes (or directly after
+   step 7 if `/ingest` will run separately), run:
+
+   ```sh
+   git add -A
+   git commit -m "fetch-paper YYYY-MM-DD: <raw-path>"
+   ```
+
+   Then print the commit hash. Note: when `/ingest` is chained,
+   it will issue its own commit covering the literature/concept
+   updates. The fetch-paper commit covers only the raw addition;
+   the two commits together tell the full provenance story.
+   Rationale: git is the memory layer per `CLAUDE.md`, and
+   commits are reversible (`git revert`).
+
 ## Constraints
 
 - Never modify anything already under `raw/`. If you decide the
