@@ -6,5 +6,8 @@ After=network.target
 Type=oneshot
 ExecStart={{REPO_ROOT}}/coordinator/.venv/bin/claude-coordinator-poll
 WorkingDirectory={{REPO_ROOT}}
+# Values baked in by install.sh from ~/.claude/.env (with defaults).
+Environment=PROJECTS_ROOT={{PROJECTS_ROOT}}
+Environment=DISK_MONITOR_PATH={{DISK_MONITOR_PATH}}
 # Don't swamp the system — poller is negligible but set Nice anyway.
 Nice=10

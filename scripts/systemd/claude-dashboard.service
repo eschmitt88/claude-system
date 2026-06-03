@@ -7,7 +7,10 @@ Type=simple
 ExecStart={{REPO_ROOT}}/dashboard/.venv/bin/claude-dashboard
 Restart=on-failure
 RestartSec=5
-Environment=CLAUDE_DASHBOARD_BIND=0.0.0.0:8080
+# Values baked in by install.sh from ~/.claude/.env (with defaults).
+Environment=CLAUDE_DASHBOARD_BIND={{DASHBOARD_BIND}}
+Environment=PROJECTS_ROOT={{PROJECTS_ROOT}}
+Environment=DISK_MONITOR_PATH={{DISK_MONITOR_PATH}}
 WorkingDirectory={{REPO_ROOT}}
 
 [Install]

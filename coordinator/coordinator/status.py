@@ -15,7 +15,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-from . import ccusage
+from . import ccusage, config
 from .readers import (
     latest_hardware_sample,
     queued_jobs,
@@ -141,7 +141,7 @@ def render(as_json: bool = False) -> str:
         out.append(
             f"  CPU {_fmt_pct(hw.get('cpu_percent'))}   "
             f"RAM {_fmt_pct(hw.get('ram_percent'))} ({_fmt_gb(hw.get('ram_used_gb'))}/{_fmt_gb(hw.get('ram_total_gb'))})   "
-            f"disk free {_fmt_gb(hw.get('disk_free_gb'))} on /mnt/projects"
+            f"disk free {_fmt_gb(hw.get('disk_free_gb'))} on {config.DISK_MONITOR_PATH}"
         )
         gpu_util = hw.get("gpu_util_pct")
         if gpu_util is not None:

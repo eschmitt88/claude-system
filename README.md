@@ -26,20 +26,60 @@ Runtime state — `~/.claude/sessions/`, `~/.claude/cache/`,
 `~/.claude/.env`, `~/.claude/state.db`, `~/projects/*` — is **not**
 tracked by this repo.
 
-## Bootstrap on a fresh machine
+## Setup
 
-```
-git clone git@github.com:<you>/claude-system.git ~/claude-system
+### Prerequisites
+
+- **Linux** with `systemd --user` (runs the dashboard + hardware poller).
+- **`git`**, **`uv`** (Python env manager), **Python 3.12**.
+- Optional: **`gh`** (GitHub CLI — lets `/new-project` create repos and
+  enable Pages); **`ccusage`** (`npm i -g ccusage` — accurate quota in
+  `/headroom`); an **NVIDIA GPU** with drivers (GPU stats; absence is
+  tolerated).
+
+### Install
+
+```sh
+git clone git@github.com:eschmitt88/claude-system.git ~/claude-system
 cd ~/claude-system
 ./install.sh
 ```
 
-`install.sh` is idempotent. Running it on an existing install upgrades
-symlinks and reinstalls the systemd unit for the dashboard.
+Clone to `~/claude-system` — that's the canonical path skills and hooks
+reference. If you clone elsewhere, `install.sh` creates a `~/claude-system`
+symlink to your clone so those references still resolve.
 
-Required environment variables live in `~/.claude/.env` (copy from
-`.env.example`). The install script does not overwrite an existing
-`.env`.
+`install.sh` is **idempotent**: it symlinks the framework into `~/.claude/`
+(backing up anything it replaces), provisions the coordinator + dashboard
+venvs, initializes `~/.claude/state.db`, bakes your config into the systemd
+units, and starts them. Re-run it any time to upgrade or to apply config
+changes.
+
+### Configure
+
+All machine-specific settings live in **one file: `~/.claude/.env`**
+(seeded from [`.env.example`](.env.example); never committed). Every key is
+optional and falls back to the default below. Edit, then re-run
+`./install.sh` to apply.
+
+| Key | Default | Purpose |
+|---|---|---|
+| `PROJECTS_ROOT` | `~/projects/research` | Where research projects live. |
+| `DISK_MONITOR_PATH` | `~/projects` (else `~`) | Volume sampled for free disk in `/headroom` + dashboard — point at your data drive. |
+| `CLAUDE_DASHBOARD_BIND` | `0.0.0.0:8080` | Dashboard `host:port`. Use `127.0.0.1:8080` for localhost-only. |
+| `DEFAULT_IDEATOR_MODEL` / `DEFAULT_IMPLEMENTER_MODEL` | `claude-opus-4-7` / `4-6` | Model roles copied into a new project's `budget.yaml`. |
+| `NTFY_TOPIC` | — | [ntfy.sh](https://ntfy.sh/) topic for notifications. |
+
+These resolve through `coordinator/config.py`, so the code works even with
+an empty `.env`; the file only overrides defaults.
+
+### Verify
+
+```sh
+~/claude-system/coordinator/.venv/bin/claude-coordinator-status   # what /headroom shows
+systemctl --user status claude-dashboard.service claude-hw-poller.timer
+# dashboard → http://localhost:8080  (or the bind you configured)
+```
 
 ## Architecture
 
@@ -106,7 +146,8 @@ safety net, not the primary control.
 
 ### Dashboard (Phase 6, Part 4)
 
-FastAPI app on `http://aiserver.local:8080`. LAN-only. Views: `/`
+FastAPI app bound to `CLAUDE_DASHBOARD_BIND` (default `0.0.0.0:8080`,
+i.e. reachable on the LAN at `http://<host>:8080`). Views: `/`
 (live now — loop sessions, live gauges, quota meters), `/queue`
 (coordinator queue), `/project/<name>` (per-project cycle table +
 DIAGNOSTICS). Auto-refreshes via SSE. Runs as a systemd user unit.
