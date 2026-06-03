@@ -6,6 +6,13 @@ max_experiments: 20
 max_consecutive_no_improvement: 3
 max_disk_gb: 500
 
+# Autonomy level. "standard" (default) = propose and wait for confirmation.
+# "max" = fetch / ingest / propose / iterate autonomously while the
+# coordinator's agency verdict permits and the ceilings above hold — use
+# `claude-coordinator-agency` to gauge token + hardware headroom.
+# See ~/.claude/rules/agency.md.
+agency: standard
+
 # Model roles. Skills read these as the defaults; CLI flags override per-call.
 # "opus" is a floating alias that resolves to the latest Opus release, so this
 # tracks new Opus versions without edits. Pin a concrete slug (e.g.

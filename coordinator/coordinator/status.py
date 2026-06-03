@@ -15,7 +15,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-from . import ccusage, config
+from . import agency, ccusage, config
 from .readers import (
     latest_hardware_sample,
     queued_jobs,
@@ -57,6 +57,9 @@ def render(as_json: bool = False) -> str:
         cc_block = f_block.result()
         cc_7d = f_7d.result()
 
+    # Agency verdict reuses the values we just fetched (no extra ccusage calls).
+    agency_verdict = agency.verdict(weekly=cc_7d, block=cc_block, hw=hw or {})
+
     if as_json:
         return json.dumps(
             {
@@ -64,6 +67,7 @@ def render(as_json: bool = False) -> str:
                 "tokens_7d": seven_d,
                 "ccusage_active_block": cc_block,
                 "ccusage_weekly": cc_7d,
+                "agency": agency_verdict,
                 "hardware": hw,
                 "running_and_queued": queued,
                 "recent_completed": completed,
@@ -153,6 +157,15 @@ def render(as_json: bool = False) -> str:
         out.append(f"  sampled at {hw.get('timestamp')}")
     else:
         out.append("  no samples yet — check `systemctl --user status claude-hw-poller.timer`")
+
+    out.append("")
+    out.append("=== Agency (autonomous-spend verdict) ===")
+    out.append(f"  {agency_verdict['headline']}")
+    for r in agency_verdict["reasons"]:
+        out.append(f"    - {r}")
+    if agency_verdict.get("suggested_session_tokens"):
+        out.append(f"    suggested spend this session: ~{_fmt_tokens(agency_verdict['suggested_session_tokens'])} tokens")
+    out.append("  (drives `agency: max` repos; standard repos still propose-and-confirm)")
 
     out.append("")
     out.append("=== Jobs ===")

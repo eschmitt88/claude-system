@@ -1,8 +1,9 @@
 ---
 name: digest
-description: /digest runs a web sweep for fresh items related to the project's active concepts and recent iterations since the last digest timestamp in _meta/last_digest, and drops new candidates into raw/_candidates/. Designed for invocation by cron or the schedule skill. Updates _meta/last_digest on completion. Never auto-ingests — user curates.
+description: /digest runs a web sweep for fresh items related to the project's active concepts and recent iterations since the last digest timestamp in _meta/last_digest, and drops new candidates into raw/_candidates/. Designed for invocation by cron or the schedule skill. Updates _meta/last_digest on completion. In standard repos never auto-ingests (the user curates); in `agency: max` repos it auto-fetches and ingests the top candidates while the coordinator's headroom verdict permits.
 respects:
   - ~/.claude/rules/evaluation.md
+  - ~/.claude/rules/agency.md
 ---
 
 # digest
@@ -60,10 +61,34 @@ would be searched without writing).
 7. **Append to `_meta/log.md`**:
    `YYYY-MM-DD HH:MM digest n=<count> window_since=<iso>`.
 
+8. **Agency auto-advance** (only in `agency: max` repos — read
+   `budget.yaml`). After writing candidates, consult the headroom
+   verdict and clear the backlog instead of leaving it for manual
+   curation (per `~/.claude/rules/agency.md`):
+
+   ```sh
+   ~/claude-system/coordinator/.venv/bin/claude-coordinator-agency --json
+   ```
+
+   - If `verdict` is `hold` (or `budget.yaml` says `agency: standard`,
+     or the field is absent) — **stop here**; this is the default
+     curate-later behavior.
+   - Otherwise, take the highest-ranked candidates (just written, plus
+     any stale uncurated ones already in `raw/_candidates/`) and run
+     `/fetch-paper` then `/ingest` on each, **count scaled by
+     `aggressiveness`**: ~6 on `high`, ~3 on `normal`, ~2 on `low`.
+     Skip anything already in the graph. Re-check the verdict every
+     couple of items and stop early on `hold` or when a `budget.yaml`
+     ceiling is hit.
+   - Log the auto-advance:
+     `YYYY-MM-DD HH:MM digest-autoingest n=<k> verdict=<v>`.
+
 ## Constraints
 
-- Do not invoke `/ingest` or `/fetch-paper` automatically. Curation
-  is the user's job.
+- **`agency: standard` (default): do not invoke `/ingest` or
+  `/fetch-paper` automatically** — curation is the user's job. Only the
+  opt-in `agency: max` level (step 8) relaxes this, and only while the
+  headroom verdict permits.
 - Do not modify `concepts/` or `literature/`.
 - If no new items pass the filter, still update `_meta/last_digest`
   and write a candidates file with `n_returned: 0` — the absence of

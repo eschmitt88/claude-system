@@ -3,6 +3,7 @@ name: discover
 description: Web-grounded literature triage. /discover <topic> [--n N] uses WebSearch and WebFetch to surface recent papers, repos, and posts on a topic, then writes a single ranked triage file to raw/_candidates/YYYY-MM-DD-<slug>.md. Each entry has title, URL, source type, one-line summary, and the reasoning for inclusion. Default N=10. Does not fetch full PDFs — /fetch-paper does that.
 respects:
   - ~/.claude/rules/evaluation.md
+  - ~/.claude/rules/agency.md
 ---
 
 # discover
