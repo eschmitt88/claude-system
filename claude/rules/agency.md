@@ -67,6 +67,11 @@ every few units of work), not just once — quota and GPU state move.
   un-mapped clusters (>=5 related concepts not already in a MoC) and
   declines redundant ones — keep that restraint; do not manufacture thin
   MoCs just because agency is `max`.
+- **`/curate`** — don't let candidate files pile up. Drain the standing
+  `raw/_candidates/` backlog: ingest the keepers, decline the rest with a
+  recorded reason, and archive each file to `raw/_candidates/_done/`. A
+  candidate file with no disposition is unfinished work; `max` repos close
+  it rather than leaving an "uncurated" pile.
 
 ## Persist the work — push at the end of every autonomous burst
 
