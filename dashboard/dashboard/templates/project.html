@@ -1,58 +1,78 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Project: {{ project }}</h1>
+<h1>{{ project }}</h1>
+<div class="subtitle">Project overview · {{ "{:,}".format(tokens_7d.total) }} tokens spent in the last 7 days</div>
 
-<section class="summary">
-  <p>
-    <strong>Tokens last 7d:</strong> {{ "{:,}".format(tokens_7d.total) }} total ·
-    <strong>Unprocessed inbox items:</strong> {{ inbox }}
-  </p>
-</section>
+<div class="stats-grid">
+  <div class="stat {% if status.candidates_count > 0 %}warn{% endif %}">
+    <div class="label">Un-curated candidates</div>
+    <div class="value">{{ status.candidates_count }}</div>
+    <div class="meta">
+      {% if status.candidates_age_days is not none %}newest {{ "%.1f"|format(status.candidates_age_days) }}d ago{% else %}none{% endif %}
+    </div>
+  </div>
+  <div class="stat">
+    <div class="label">Pending proposals</div>
+    <div class="value">{{ status.pending_proposals }}</div>
+    <div class="meta">in <code>experiments/_proposals/</code></div>
+  </div>
+  <div class="stat">
+    <div class="label">Last digest</div>
+    <div class="value">
+      {% if status.last_digest_age_days is not none %}{{ "%.1f"|format(status.last_digest_age_days) }}<span class="unit">d ago</span>
+      {% else %}—{% endif %}
+    </div>
+    <div class="meta">{{ status.last_digest or "never run" }}</div>
+  </div>
+  <div class="stat">
+    <div class="label">Tokens · 7d</div>
+    <div class="value">{{ "{:,}".format(tokens_7d.total) }}</div>
+    <div class="meta">across this project</div>
+  </div>
+</div>
 
 {% if diagnostics %}
-<section class="diagnostics">
-  <h2>Latest Diagnostics</h2>
-  <pre>{{ diagnostics }}</pre>
-</section>
+<h2>Latest diagnostics</h2>
+<div class="card">
+<pre>{{ diagnostics }}</pre>
+</div>
 {% endif %}
 
-<section>
-  <h2>Cycles (last {{ cycles|length }})</h2>
-  {% if cycles %}
-  <table>
-    <thead>
-      <tr>
-        <th>slug</th>
-        <th>status</th>
-        <th>val metric</th>
-        <th>final metric</th>
-        <th>result</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for c in cycles %}
-      <tr>
-        <td><code>{{ c.slug }}</code></td>
-        <td>{{ c.status }}</td>
-        <td>
-          {% if c.metrics %}
-            {% for k, v in c.metrics.items() %}
-              {% if loop.index <= 1 %}{{ k }}={{ v }}{% endif %}
-            {% endfor %}
-          {% else %}—{% endif %}
-        </td>
-        <td>
-          {% if c.final_metrics %}
-            {{ c.final_metrics.metric_name or "metric" }}={{ c.final_metrics.metric_value }}
-          {% else %}—{% endif %}
-        </td>
-        <td class="result">{{ c.result or "" }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-    <p class="fine">no experiments yet.</p>
-  {% endif %}
-</section>
+<h2>Cycles <span class="count">{{ cycles|length }}</span></h2>
+{% if cycles %}
+<table>
+  <thead>
+    <tr>
+      <th>slug</th>
+      <th>status</th>
+      <th>val metric</th>
+      <th>final metric</th>
+      <th>result</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for c in cycles %}
+    <tr>
+      <td><code>{{ c.slug }}</code></td>
+      <td>{{ c.status }}</td>
+      <td>
+        {% if c.metrics %}
+          {% for k, v in c.metrics.items() %}
+            {% if loop.index <= 1 %}<span class="mono">{{ k }}=<strong>{{ v }}</strong></span>{% endif %}
+          {% endfor %}
+        {% else %}—{% endif %}
+      </td>
+      <td>
+        {% if c.final_metrics %}
+          <span class="mono">{{ c.final_metrics.metric_name or "metric" }}=<strong>{{ c.final_metrics.metric_value }}</strong></span>
+        {% else %}—{% endif %}
+      </td>
+      <td>{{ c.result or "" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card"><p class="fine" style="margin:0;">No experiments yet — run <code>/propose</code> in this project to get started.</p></div>
+{% endif %}
 {% endblock %}

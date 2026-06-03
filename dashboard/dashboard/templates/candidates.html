@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Candidates</h1>
+<div class="subtitle">Un-curated output from <code>/discover</code> and <code>/digest</code> in <code>{{ project }}</code>. Curate with <code>/fetch-paper</code> + <code>/ingest</code>.</div>
+
+{% if not files %}
+<div class="card">
+  <p class="fine" style="margin: 0;">No candidate files in <code>raw/_candidates/</code>. Run <code>/discover &lt;topic&gt;</code> or <code>/digest</code> to populate.</p>
+</div>
+{% endif %}
+
+{% for f in files %}
+<div class="candidate-file">
+  <div class="file-head">
+    <span class="filename">{{ f.filename }}</span>
+    <span class="file-meta">
+      <span class="pill">{{ f.frontmatter.source or "?" }}</span>
+      {% if f.frontmatter.topic %}<span>topic: <em>{{ f.frontmatter.topic }}</em></span> · {% endif %}
+      {{ f.entries|length }} entries
+      {% if f.mtime_age_days is not none %} · {{ "%.1f"|format(f.mtime_age_days) }}d ago{% endif %}
+    </span>
+  </div>
+
+  {% if f.entries %}
+  <div class="entries">
+    {% for e in f.entries %}
+    <div class="entry">
+      <div class="e-head">
+        <div class="e-title">
+          {% if e.url %}<a href="{{ e.url }}" target="_blank" rel="noopener">{{ e.title }}</a>
+          {% else %}{{ e.title }}{% endif %}
+        </div>
+        <div class="e-meta">
+          {% if e.type %}<span class="type">{{ e.type }}</span>{% endif %}
+          {% if e.date %}<span class="date">{{ e.date }}</span>{% if e.date_inferred %} <span class="hint">(inf)</span>{% endif %}{% endif %}
+        </div>
+      </div>
+      {% if e.url %}<div class="e-url">{{ e.url }}</div>{% endif %}
+      {% if e.summary %}<div class="e-summary">{{ e.summary }}</div>{% endif %}
+      {% if e.reason %}<div class="e-reason">{{ e.reason }}</div>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+    <p class="fine">no entries parsed.</p>
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}
