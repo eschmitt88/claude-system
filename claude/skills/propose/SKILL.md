@@ -3,6 +3,7 @@ name: propose
 description: Strategic ideation for the active research project — no implementation. Reads concepts/, the 10 most recently modified literature notes, and the 5 most recent experiment READMEs + their metrics.json. Emits one proposal file at experiments/_proposals/YYYY-MM-DD-<slug>.md with flat YAML frontmatter (hypothesis, rationale, reads, expected_metric, design_sketch, risks, related_prior, estimated_runtime, status) plus a prose argument. Does not scaffold an experiment, write code, or touch dvc.yaml.
 respects:
   - ~/.claude/rules/evaluation.md
+  - ~/.claude/rules/agency.md
 ---
 
 # propose

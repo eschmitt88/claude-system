@@ -150,6 +150,16 @@ skills (`/implement`, `/iterate`, `/ingest`, `/digest`) declare their
 job to the queue and honor policy verdicts. A PreToolUse hook is the
 safety net, not the primary control.
 
+**Agency verdict.** `claude-coordinator-agency` (shown in `/headroom`)
+turns the quota + hardware state into a `GO / SLOW / HOLD` recommendation,
+using reset-anchored token pacing (unused weekly quota is wasted, so being
+behind pace near the reset means spend now) plus live CPU/RAM/GPU headroom.
+A project opts into autonomy with `agency: max` in its `budget.yaml`: in
+those repos `/digest` auto-fetches and ingests the top candidates, and
+`/iterate` chains cycles, while the verdict permits and the `budget.yaml`
+ceilings hold. Default `agency: standard` keeps the propose-and-confirm
+behavior. See `claude/rules/agency.md`.
+
 ### Dashboard (Phase 6, Part 4)
 
 FastAPI app bound to `CLAUDE_DASHBOARD_BIND` (default `0.0.0.0:8080`,
