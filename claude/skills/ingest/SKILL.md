@@ -37,6 +37,22 @@ it raises.
      heading `**Relevance:**`. The user overrides in the diff if they
      disagree.
    - `tags:` suggested from content; user can prune.
+   - **Trust signals** (papers/repos) → fill these credibility fields,
+     extracted from the source itself where possible:
+     - `institutions:` → author affiliations as a list (e.g.
+       `["Google DeepMind", "MIT"]`), read from the paper's first page /
+       author block. The single biggest "who's behind this" signal.
+     - `peer_reviewed:` → `true` if published at a peer-reviewed venue,
+       `false` for an arXiv / workshop / blog preprint, `unknown` if
+       unclear from the source.
+     - `code_url:` → link to released code or artifacts if the source
+       names one (GitHub, project page); else leave null.
+     - `citations:` → integer only if you can establish it (e.g. a
+       Semantic Scholar lookup via `WebFetch`); otherwise leave null —
+       never guess a count.
+     - `credibility:` → a 0–5 composite per the rubric below, with a
+       one-line justification under `**Credibility:**` in the
+       `## Trust signals` section.
 
    **Relevance rubric** (project-specific; read the active project's
    `CLAUDE.md` "What this project is about" section to ground the
@@ -62,6 +78,26 @@ it raises.
    confirms. If the active project has no clear mission statement
    in its `CLAUDE.md`, default to `relevance: 0` and tell the user
    the rubric could not be applied.
+
+   **Trust-signal rubric** — `credibility` is *independent of
+   `relevance`*: a highly relevant paper can be low-credibility (an
+   independent preprint with no code) and a low-relevance paper can be
+   high-credibility. Score what the evidence supports:
+
+   - **5** — top-tier lab/venue, peer-reviewed, code + artifacts
+     released, well cited or independently reproduced.
+   - **4** — strong on most signals (e.g. a major-lab preprint with
+     code, not yet peer-reviewed).
+   - **3** — solid: a reputable group **or** a peer-reviewed venue;
+     partial signals.
+   - **2** — mixed: preprint from an unknown group, no code, few citations.
+   - **1** — weak: independent/unverifiable authorship, no peer review,
+     no released code, no citations.
+   - **0** — unscored (insufficient information).
+
+   Institution is a *prior, not a verdict* — weight reproducibility
+   (released code/artifacts) and peer review at least as heavily as the
+   author's affiliation. Record the reasoning so the user can override.
 
 4. **Candidate concepts**: extract 1–5 atomic ideas the source raises.
    For each, check `concepts/` for an existing file by name (case- and
