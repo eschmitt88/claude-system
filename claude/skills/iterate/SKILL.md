@@ -1,6 +1,6 @@
 ---
 name: iterate
-description: One propose→implement loop cycle per invocation. Reads the latest implemented experiment's ## Diagnostics, picks the strongest next_candidate, runs the /propose logic seeded with that candidate, presents the proposal, and pauses for user approval. On approval calls /implement. --experiment <path> targets a specific experiment; --chain <N> repeats up to N times without pausing; --chain-until <cond> halts on a budget / metric / count threshold. Reads budget.yaml as implicit halting conditions each cycle. Appends every cycle to _meta/iteration_log.md.
+description: One propose→implement loop cycle per invocation. Reads the latest implemented experiment's Diagnostics section, picks the strongest next_candidate, runs the /propose logic seeded with that candidate, presents the proposal, and pauses for user approval. On approval calls /implement. --experiment <path> targets a specific experiment; --chain <N> repeats up to N times without pausing; --chain-until <cond> halts on a budget / metric / count threshold. Reads budget.yaml as implicit halting conditions each cycle. Appends every cycle to _meta/iteration_log.md.
 respects:
   - ~/.claude/rules/evaluation.md
 ---

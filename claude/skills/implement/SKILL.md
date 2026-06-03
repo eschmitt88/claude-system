@@ -1,6 +1,6 @@
 ---
 name: implement
-description: Execute a proposal inside a fresh subagent — the MLE-IDEATOR separation boundary and the only skill allowed to spawn a subagent. The subagent runs /new-experiment, writes code + config.yaml, executes dvc exp run, captures metrics and results, then writes a structured ## Diagnostics section to README.md. On success, files the proposal under experiments/_proposals/_done/ with status: implemented; on hard failure, files it under _proposals/_failed/ with the captured error. Supports --seeds N for pass@k multi-seed runs and --implementer-model <slug> to pick the subagent model (default from budget.yaml).
+description: Execute a proposal inside a fresh subagent — the MLE-IDEATOR separation boundary and the only skill allowed to spawn a subagent. The subagent runs /new-experiment, writes code + config.yaml, executes dvc exp run, captures metrics and results, then writes a structured Diagnostics section to README.md. On success, files the proposal under experiments/_proposals/_done/ with status: implemented; on hard failure, files it under _proposals/_failed/ with the captured error. Supports --seeds N for pass@k multi-seed runs and --implementer-model <slug> to pick the subagent model (default from budget.yaml).
 respects:
   - ~/.claude/rules/evaluation.md
 ---
