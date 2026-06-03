@@ -1,64 +1,193 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Now</h1>
+<p class="subtitle">Real-time view of token usage, hardware, and project state across the research framework.</p>
 
-<section class="tokens">
-  <h2>Claude token usage (locally observed)</h2>
-  <div class="meter">
-    <strong>Last 5h:</strong>
-    {{ "{:,}".format(tokens_5h.total) }} total
-    (in {{ "{:,}".format(tokens_5h.input_tokens) }} / out {{ "{:,}".format(tokens_5h.output_tokens) }} / cache_read {{ "{:,}".format(tokens_5h.cache_read_tokens) }})
+{# Stat cards: every primary metric is a % with a horizontal bar.
+   Bar color steps: blue <60, amber 60-85, red >85. Empty cells (None) render as "—". #}
+{% macro bar_class(pct) -%}
+  {%- if pct is none -%}
+  {%- elif pct >= 85 %} bad
+  {%- elif pct >= 60 %} warn
+  {%- endif -%}
+{%- endmacro %}
+{% macro stat(label, pct, meta, sub=None) %}
+<div class="stat pctstat{{ bar_class(pct) }}">
+  <div class="label">{{ label }}</div>
+  <div class="value">
+    {%- if pct is none -%}—<span class="unit">%</span>
+    {%- else -%}{{ "%.1f" % pct }}<span class="unit">%</span>{%- endif -%}
   </div>
-  <div class="meter">
-    <strong>Last 7d:</strong>
-    {{ "{:,}".format(tokens_7d.total) }} total
-    (in {{ "{:,}".format(tokens_7d.input_tokens) }} / out {{ "{:,}".format(tokens_7d.output_tokens) }} / cache_read {{ "{:,}".format(tokens_7d.cache_read_tokens) }})
+  <div class="bar{{ bar_class(pct) }}">
+    <span style="width: {{ '%.1f'|format([pct or 0, 100]|min) }}%"></span>
   </div>
-  <p class="fine">Local accumulator. Anthropic does not expose rolling-window quota — run <code>ccusage</code> for reset boundaries.</p>
-</section>
+  <div class="meta">{{ meta }}</div>
+  {% if sub %}<div class="meta sub">{{ sub }}</div>{% endif %}
+</div>
+{% endmacro %}
 
-<section class="hw" id="hw">
-  <h2>Hardware (latest sample)</h2>
+<div class="stats-grid">
+  {# === Claude quota === #}
+  {% if cc_block %}
+    {{ stat(
+      'Tokens · 5h block',
+      cc_block.pct_vs_max20x_limit,
+      '%s tokens · $%.2f'|format('{:,}'.format(cc_block.tokens), cc_block.cost_usd or 0),
+      sub=(
+        '%sh %sm left · burn %s/min'|format(
+          (cc_block.remaining_minutes or 0) // 60,
+          (cc_block.remaining_minutes or 0) % 60,
+          '{:,}'.format((cc_block.burn_tokens_per_min or 0) | int)
+        )
+      )
+    ) }}
+  {% else %}
+    {{ stat(
+      'Tokens · 5h block',
+      None,
+      '{:,} tokens (stop-hook accumulator)'.format(tokens_5h.total),
+      sub='ccusage unavailable — run npm i -g ccusage'
+    ) }}
+  {% endif %}
+
+  {% if cc_7d %}
+    {{ stat(
+      'Tokens · weekly',
+      cc_7d.pct_vs_max20x_limit,
+      '%s tokens · $%.2f'|format('{:,}'.format(cc_7d.tokens), cc_7d.cost_usd or 0),
+      sub='%d blocks · resets in %dh (Mon 17:00 local)'|format(
+        cc_7d.n_blocks or 0,
+        cc_7d.remaining_hours or 0
+      )
+    ) }}
+  {% else %}
+    {{ stat(
+      'Tokens · weekly',
+      None,
+      '{:,} tokens (stop-hook accumulator)'.format(tokens_7d.total),
+      sub='ccusage unavailable'
+    ) }}
+  {% endif %}
+
+  {# === Hardware === #}
   {% if hw %}
-    <div>CPU {{ "%.0f" % hw.cpu_percent }}% · RAM {{ "%.0f" % hw.ram_percent }}% ({{ "%.1f" % hw.ram_used_gb }} / {{ "%.1f" % hw.ram_total_gb }} GB)</div>
-    <div>Disk free: {{ "%.1f" % hw.disk_free_gb }} GB on /mnt/projects</div>
+    {{ stat(
+      'CPU',
+      hw.cpu_percent,
+      'sampled %s'|format(hw.timestamp)
+    ) }}
+    {{ stat(
+      'RAM',
+      hw.ram_percent,
+      '%.1f / %.0f GB'|format(hw.ram_used_gb, hw.ram_total_gb)
+    ) }}
     {% if hw.gpu_util_pct is not none %}
-      <div>GPU util {{ "%.0f" % hw.gpu_util_pct }}% · VRAM {{ "%.1f" % hw.gpu_mem_used_gb }} / {{ "%.1f" % hw.gpu_mem_total_gb }} GB · {{ "%.0f" % hw.gpu_temp_c }}°C · {{ "%.0f" % hw.gpu_power_w }} W</div>
+      {% set vram_pct = (100.0 * hw.gpu_mem_used_gb / hw.gpu_mem_total_gb) if hw.gpu_mem_total_gb else None %}
+      {{ stat(
+        'GPU',
+        hw.gpu_util_pct,
+        'VRAM %.1f / %.0f GB (%.0f%%)'|format(hw.gpu_mem_used_gb, hw.gpu_mem_total_gb, vram_pct or 0),
+        sub='%.0f°C · %.0f W'|format(hw.gpu_temp_c, hw.gpu_power_w)
+      ) }}
     {% endif %}
-    <div class="fine">sampled at {{ hw.timestamp }}</div>
+    {% set disk_total = hw.disk_used_gb + hw.disk_free_gb %}
+    {% set disk_pct = 100.0 * hw.disk_used_gb / disk_total if disk_total else None %}
+    {{ stat(
+      'Disk · /mnt/projects',
+      disk_pct,
+      '%.0f used / %.0f free GB'|format(hw.disk_used_gb, hw.disk_free_gb)
+    ) }}
   {% else %}
-    <div class="warn">No hardware samples yet. Check <code>systemctl --user status claude-hw-poller.timer</code>.</div>
+  <div class="stat warn">
+    <div class="label">Hardware</div>
+    <div class="value">—</div>
+    <div class="meta">No samples. Check <code>claude-hw-poller.timer</code>.</div>
+  </div>
   {% endif %}
-</section>
+</div>
 
-<section class="loops">
-  <h2>Active loop sessions</h2>
-  {% if loops %}
-    <ul>
-      {% for l in loops %}
-        <li><code>{{ l.name }}</code> · created {{ l.created }} · {% if l.attached %}attached{% else %}detached{% endif %}</li>
-      {% endfor %}
-    </ul>
-  {% else %}
-    <p class="fine">no tmux sessions with <code>loop*</code> names.</p>
-  {% endif %}
-</section>
+{# Weekly trend sparkline kept as a small standalone element below the grid. #}
+<div class="trend-strip">
+  <span class="label">7-day token trend</span>
+  <svg class="sparkline" id="sparkline-7d" viewBox="0 0 200 28" preserveAspectRatio="none"></svg>
+</div>
+
+{% if attention %}
+<h2>Needs attention <span class="count">{{ attention|length }}</span></h2>
+<div class="attention-feed">
+  {% for a in attention %}
+  <div class="attention-item">
+    <span class="icon">!</span>
+    <div class="what">
+      <div>{{ a.what }}</div>
+      <div class="where">{{ a.where }}</div>
+    </div>
+    {% if a.url %}<a href="{{ a.url }}">Open →</a>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<h2>Projects <span class="count">{{ project_rollup|length }}</span></h2>
+{% if project_rollup %}
+<div class="project-cards">
+  {% for p in project_rollup %}
+  <a class="project-card {% if p.candidates_count > 0 %}attention{% endif %}" href="/project/{{ p.name }}">
+    <div class="name">
+      <span>{{ p.name }}</span>
+      {% if p.candidates_count > 0 %}<span class="badge">{{ p.candidates_count }} new</span>{% endif %}
+    </div>
+    <div class="row">
+      <span class="k">candidates</span>
+      <span class="v {% if p.candidates_count > 0 %}attention-inline{% endif %}">
+        {{ p.candidates_count }}{% if p.candidates_age_days is not none %} · {{ "%.1f"|format(p.candidates_age_days) }}d{% endif %}
+      </span>
+    </div>
+    <div class="row">
+      <span class="k">pending proposals</span>
+      <span class="v">{{ p.pending_proposals }}</span>
+    </div>
+    <div class="row">
+      <span class="k">last digest</span>
+      <span class="v">
+        {% if p.last_digest_age_days is not none %}{{ "%.1f"|format(p.last_digest_age_days) }}d ago{% else %}never{% endif %}
+      </span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card-empty">No projects yet — <code>cd ~/projects/research && claude</code>, then <code>/new-project &lt;slug&gt;</code>.</div>
+{% endif %}
+
+{% if loops %}
+<h2>Active loop sessions <span class="count">{{ loops|length }}</span></h2>
+<div class="card">
+  <ul style="margin: 0; padding-left: 18px;">
+    {% for l in loops %}
+    <li><code>{{ l.name }}</code> · created {{ l.created }} · {% if l.attached %}<span class="good">attached</span>{% else %}detached{% endif %}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endif %}
 
 <script>
-  const src = new EventSource("/events");
-  src.addEventListener("snapshot", (e) => {
-    const d = JSON.parse(e.data);
-    if (d.hw) {
-      const hw = d.hw;
-      document.getElementById("hw").innerHTML = `
-        <h2>Hardware (live)</h2>
-        <div>CPU ${hw.cpu_percent.toFixed(0)}% · RAM ${hw.ram_percent.toFixed(0)}% (${hw.ram_used_gb.toFixed(1)}/${hw.ram_total_gb.toFixed(1)} GB)</div>
-        <div>Disk free: ${hw.disk_free_gb.toFixed(1)} GB on /mnt/projects</div>
-        ${hw.gpu_util_pct !== null
-          ? `<div>GPU util ${hw.gpu_util_pct.toFixed(0)}% · VRAM ${hw.gpu_mem_used_gb.toFixed(1)}/${hw.gpu_mem_total_gb.toFixed(1)} GB · ${hw.gpu_temp_c.toFixed(0)}°C · ${hw.gpu_power_w.toFixed(0)} W</div>`
-          : ""}
-        <div class="fine">sampled at ${hw.timestamp}</div>`;
-    }
+fetch('/api/tokens/sparkline').then(r => r.json()).then(d => {
+  if (!d.points || d.points.length < 2) return;
+  if (d.points.every(p => p === 0)) return;  // no data → leave SVG empty
+  const svg = document.getElementById('sparkline-7d');
+  const max = Math.max(...d.points, 1);
+  const w = 200, h = 28;
+  const step = w / (d.points.length - 1);
+  let line = '', fill = `M 0 ${h} `;
+  d.points.forEach((p, i) => {
+    const x = i * step;
+    const y = h - (p / max) * (h - 4) - 2;
+    line += (i === 0 ? `M ${x} ${y}` : ` L ${x} ${y}`);
+    fill += `L ${x} ${y} `;
   });
+  fill += `L ${w} ${h} Z`;
+  svg.innerHTML = `<path class="fill" d="${fill}"/><path class="line" d="${line}"/>`;
+});
 </script>
 {% endblock %}

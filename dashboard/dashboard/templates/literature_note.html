@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+{% set fm = note.frontmatter %}
+<h1>{{ fm.title or note.relpath }}</h1>
+<div class="subtitle"><a href="/project/{{ project }}/literature">← all literature</a> · <code>literature/{{ note.relpath }}</code></div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 24px; align-items: start;">
+  <section class="note-body">
+    {{ note.html|safe }}
+  </section>
+
+  <aside>
+    <table class="kv">
+      {% if fm.authors %}
+      <tr><th>authors</th><td>
+        {% if fm.authors is iterable and fm.authors is not string %}
+          {{ fm.authors|join(", ") }}
+        {% else %}{{ fm.authors }}{% endif %}
+      </td></tr>
+      {% endif %}
+      {% if fm.year %}<tr><th>year</th><td class="mono">{{ fm.year }}</td></tr>{% endif %}
+      {% if fm.venue %}<tr><th>venue</th><td>{{ fm.venue }}</td></tr>{% endif %}
+      {% if fm.url %}<tr><th>url</th><td><a href="{{ fm.url }}" target="_blank" rel="noopener">↗ open</a></td></tr>{% endif %}
+      {% if fm.relevance is not none %}<tr><th>relevance</th><td><span class="tag" style="background: {% if fm.relevance >= 4 %}#0ea5e944{% else %}var(--bg-2){% endif %}">{{ fm.relevance }}/5</span></td></tr>{% endif %}
+      {% if fm.status %}<tr><th>status</th><td><span class="tag">{{ fm.status }}</span></td></tr>{% endif %}
+      {% if fm.added %}<tr><th>added</th><td class="fine mono">{{ fm.added }}</td></tr>{% endif %}
+      {% if fm.tags %}<tr><th>tags</th><td>{% for t in fm.tags %}<span class="tag">{{ t }}</span>{% endfor %}</td></tr>{% endif %}
+      {% if fm.related_concepts %}
+      <tr><th>concepts</th><td>
+        {% for c in fm.related_concepts %}<div>{{ c|safe }}</div>{% endfor %}
+      </td></tr>
+      {% endif %}
+      {% if fm.related_experiments %}
+      <tr><th>experiments</th><td>
+        {% for e in fm.related_experiments %}<div><code>{{ e }}</code></div>{% endfor %}
+      </td></tr>
+      {% endif %}
+    </table>
+  </aside>
+</div>
+{% endblock %}

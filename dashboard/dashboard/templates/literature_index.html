@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Literature</h1>
+<div class="subtitle">All notes under <code>literature/</code> in <code>{{ project }}</code>, grouped by kind.</div>
+
+{% if not groups %}
+<div class="card"><p class="fine" style="margin:0;">no notes under <code>literature/</code> yet — <code>/fetch-paper &lt;id&gt;</code> + <code>/ingest</code> to add one.</p></div>
+{% endif %}
+
+{% for kind, notes in groups.items() %}
+<h2>{{ kind }} <span class="count">{{ notes|length }}</span></h2>
+<table>
+  <thead>
+    <tr>
+      <th>citekey</th>
+      <th>title</th>
+      <th>year</th>
+      <th>relevance</th>
+      <th>status</th>
+      <th>added</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for n in notes %}
+    <tr>
+      <td><a href="/project/{{ project }}/literature/{{ n.relpath }}"><code>{{ n.citekey }}</code></a></td>
+      <td>{{ n.title }}</td>
+      <td>{{ n.year or "—" }}</td>
+      <td>{% if n.relevance is not none %}<span class="tag">{{ n.relevance }}/5</span>{% else %}—{% endif %}</td>
+      <td>{% if n.status %}<span class="tag">{{ n.status }}</span>{% else %}—{% endif %}</td>
+      <td class="fine">{{ n.added or "—" }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endfor %}
+{% endblock %}

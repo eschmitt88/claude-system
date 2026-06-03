@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+{% set fm = concept.frontmatter %}
+<h1>{{ fm.name or concept.slug }}</h1>
+<div class="subtitle"><a href="/project/{{ project }}/concepts">All concepts</a> · <code>concepts/{{ concept.slug }}.md</code></div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 32px; align-items: start;">
+  <section class="note-body">
+    {{ concept.html|safe }}
+  </section>
+
+  <aside>
+    <table class="kv">
+      {% if fm.status %}<tr><th>status</th><td><span class="tag">{{ fm.status }}</span></td></tr>{% endif %}
+      {% if fm.added %}<tr><th>added</th><td class="mono">{{ fm.added }}</td></tr>{% endif %}
+      {% if fm.tags %}<tr><th>tags</th><td>{% for t in fm.tags %}<span class="tag">{{ t }}</span>{% endfor %}</td></tr>{% endif %}
+      {% if fm.related_concepts %}
+      <tr><th>related</th><td>
+        {% for c in fm.related_concepts %}<div style="margin-bottom:4px;">{{ c|safe }}</div>{% endfor %}
+      </td></tr>
+      {% endif %}
+      {% if fm.sources %}
+      <tr><th>sources</th><td>
+        {% for s in fm.sources %}<div style="margin-bottom:4px;">{{ s|safe }}</div>{% endfor %}
+      </td></tr>
+      {% endif %}
+      {% if fm.used_by %}
+      <tr><th>used by</th><td>
+        {% for u in fm.used_by %}
+          <div style="margin-bottom:4px;">
+            <code>{{ u.project_slug if u.project_slug is defined else u }}</code>
+            {% if u.imported_on is defined %}<span class="fine"> · {{ u.imported_on }}</span>{% endif %}
+          </div>
+        {% endfor %}
+      </td></tr>
+      {% endif %}
+      {% if concept.literature_backrefs %}
+      <tr><th>cited by</th><td>
+        {% for r in concept.literature_backrefs %}
+          <div style="margin-bottom:4px;"><a href="/project/{{ project }}/literature/{{ r }}"><code>{{ r }}</code></a></div>
+        {% endfor %}
+      </td></tr>
+      {% endif %}
+    </table>
+  </aside>
+</div>
+{% endblock %}

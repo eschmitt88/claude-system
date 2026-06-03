@@ -1,59 +1,58 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Queue</h1>
+<div class="subtitle">Coordinator-tracked jobs declared by skills. Estimates here come from <code>/plan</code>; actuals from job-complete events.</div>
 
-<section>
-  <h2>Running + queued</h2>
-  {% if jobs %}
-  <table>
-    <thead>
-      <tr><th>id</th><th>project</th><th>kind</th><th>status</th><th>est_tokens</th><th>description</th><th>created</th></tr>
-    </thead>
-    <tbody>
-      {% for j in jobs %}
-        <tr class="{{ j.status }}">
-          <td>#{{ j.id }}</td>
-          <td>{{ j.project }}</td>
-          <td>{{ j.kind }}</td>
-          <td>{{ j.status }}</td>
-          <td>{{ "{:,}".format(j.est_tokens or 0) }}</td>
-          <td>{{ j.description or "" }}</td>
-          <td class="fine">{{ j.created_at }}</td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-    <p class="fine">nothing queued or running.</p>
-  {% endif %}
-</section>
+<h2>Running + queued</h2>
+{% if jobs %}
+<table>
+  <thead>
+    <tr><th>id</th><th>project</th><th>kind</th><th>status</th><th>est tokens</th><th>description</th><th>created</th></tr>
+  </thead>
+  <tbody>
+    {% for j in jobs %}
+    <tr class="{{ j.status }}">
+      <td><code>#{{ j.id }}</code></td>
+      <td>{{ j.project }}</td>
+      <td>{{ j.kind }}</td>
+      <td>{{ j.status }}</td>
+      <td>{{ "{:,}".format(j.est_tokens or 0) }}</td>
+      <td>{{ j.description or "" }}</td>
+      <td class="fine">{{ j.created_at }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card"><p class="fine" style="margin:0;">Nothing queued or running.</p></div>
+{% endif %}
 
-<section>
-  <h2>Recent completed (last 25)</h2>
-  {% if completed %}
-  <table>
-    <thead>
-      <tr><th>id</th><th>project</th><th>kind</th><th>status</th><th>est</th><th>actual</th><th>Δ</th></tr>
-    </thead>
-    <tbody>
-      {% for j in completed %}
-        <tr>
-          <td>#{{ j.id }}</td>
-          <td>{{ j.project }}</td>
-          <td>{{ j.kind }}</td>
-          <td>{{ j.status }}</td>
-          <td>{{ "{:,}".format(j.est_tokens or 0) }}</td>
-          <td>{{ "{:,}".format(j.actual_tokens or 0) }}</td>
-          <td>
-            {% set d = (j.actual_tokens or 0) - (j.est_tokens or 0) %}
-            {% if d >= 0 %}+{% endif %}{{ "{:,}".format(d) }}
-          </td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-    <p class="fine">no completed jobs yet.</p>
-  {% endif %}
-</section>
+<h2>Recent completed <span class="count">last {{ completed|length }}</span></h2>
+{% if completed %}
+<table>
+  <thead>
+    <tr><th>id</th><th>project</th><th>kind</th><th>status</th><th>est</th><th>actual</th><th>Δ</th></tr>
+  </thead>
+  <tbody>
+    {% for j in completed %}
+    <tr>
+      <td><code>#{{ j.id }}</code></td>
+      <td>{{ j.project }}</td>
+      <td>{{ j.kind }}</td>
+      <td>{{ j.status }}</td>
+      <td>{{ "{:,}".format(j.est_tokens or 0) }}</td>
+      <td>{{ "{:,}".format(j.actual_tokens or 0) }}</td>
+      <td>
+        {% set d = (j.actual_tokens or 0) - (j.est_tokens or 0) %}
+        <span class="{% if d > 0 %}warn{% elif d < 0 %}good{% endif %}">
+          {% if d >= 0 %}+{% endif %}{{ "{:,}".format(d) }}
+        </span>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card"><p class="fine" style="margin:0;">No completed jobs yet.</p></div>
+{% endif %}
 {% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Concepts</h1>
+<div class="subtitle">Semantic memory for <code>{{ project }}</code>. Promote when ≥5 related concepts accumulate.</div>
+
+{% if not concepts %}
+<div class="card"><p class="fine" style="margin:0;">no concepts under <code>concepts/</code> yet.</p></div>
+{% else %}
+<div class="project-cards">
+  {% for c in concepts %}
+  <a class="project-card" href="/project/{{ project }}/concepts/{{ c.name }}">
+    <div class="name">
+      <span>{{ c.name }}</span>
+      {% if c.status %}<span class="badge" style="background: var(--bg-3); color: var(--accent);">{{ c.status }}</span>{% endif %}
+    </div>
+    {% if c.tags %}
+    <div style="margin-bottom: 10px;">{% for t in c.tags %}<span class="tag">{{ t }}</span>{% endfor %}</div>
+    {% endif %}
+    <div class="row"><span class="k">used by</span><span class="v">{{ c.used_by_count }} project(s)</span></div>
+    <div class="row"><span class="k">sources</span><span class="v">{{ c.sources_count }}</span></div>
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}
