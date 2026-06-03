@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Activity</h1>
+<div class="subtitle">Recent commits and the session journal (Did / Findings / Next) for <code>{{ project }}</code>.</div>
+
+<h2>Recent commits</h2>
+{% if commits %}
+<div class="card" style="padding:0;overflow:hidden;">
+<table class="activity-commits">
+  <thead><tr><th>when</th><th>change</th><th>commit</th></tr></thead>
+  <tbody>
+  {% for c in commits %}
+    <tr>
+      <td class="fine" style="white-space:nowrap;">{{ c.ago }}</td>
+      <td>{{ c.subject }}</td>
+      <td><code>{{ c.sha }}</code></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="card"><p class="fine" style="margin:0;">No git history (or not a git repo).</p></div>
+{% endif %}
+
+<h2>Session notes <span class="fine">NOTES.md</span></h2>
+{% if sessions %}
+  {% for s in sessions %}
+  <div class="card session">
+    <h3 style="margin:0 0 6px;">{{ s.heading }}</h3>
+    <div class="md">{{ s.html|safe }}</div>
+  </div>
+  {% endfor %}
+{% else %}
+<div class="card"><p class="fine" style="margin:0;">No <code>NOTES.md</code> sessions yet — run <code>/wrap</code> to record one.</p></div>
+{% endif %}
+
+<style>
+  table.activity-commits { width:100%; border-collapse:collapse; font-size:13px; }
+  table.activity-commits th { text-align:left; padding:8px 12px; color:var(--mut,#9aa4b2); font-weight:600;
+    font-size:11px; text-transform:uppercase; letter-spacing:.04em; border-bottom:1px solid var(--line,#2a2f3a); }
+  table.activity-commits td { padding:7px 12px; border-bottom:1px solid var(--line,#2a2f3a); vertical-align:top; }
+  table.activity-commits tr:last-child td { border-bottom:0; }
+  .card.session { margin:10px 0; }
+  .card.session .md h3 { font-size:14px; margin:12px 0 4px; }
+  .card.session .md ul { margin:4px 0 8px; padding-left:20px; }
+  .card.session .md li { margin:2px 0; }
+</style>
+{% endblock %}
