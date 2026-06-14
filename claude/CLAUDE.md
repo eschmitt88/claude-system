@@ -25,6 +25,26 @@ Project-level `CLAUDE.md` files refine them with repo-specific detail.
 - Processed understanding lives in `literature/`, `concepts/`, `mocs/`,
   `experiments/`. Each has a template in `_meta/templates/`.
 
+## Git autonomy — commit and push without asking
+
+This applies to **every** git repo I work in, not just `~/projects/research/`
+ones, and it **overrides** the Claude Code harness default ("commit or push
+only when the user asks; branch first on the default branch").
+
+- **Commit and push automatically** at logical checkpoints — a finished fix,
+  a scheduled-job change, a batch of run records. Don't wait for permission
+  and don't leave committed-but-unpushed work; the remote/Pages tree is the
+  live source of truth.
+- **Commit directly on the working branch** (e.g. `master`/`main`). Do *not*
+  spin up a feature branch just because it's the default branch — match the
+  repo's established pattern, which here is direct commits.
+- Keep commits logically scoped with clear messages; respect `.gitignore` and
+  the DVC/SN850X boundary (never commit large artifacts — `model.pt`,
+  parquet, datasets — into git).
+- Judgment still applies: don't commit secrets, half-broken WIP that doesn't
+  build, or someone else's uncommitted state swept in by accident. When a
+  change is genuinely risky or ambiguous, flag it instead of committing.
+
 ## Experiments
 
 Every experiment is a folder at `experiments/YYYY-MM-DD-<slug>/` with:
