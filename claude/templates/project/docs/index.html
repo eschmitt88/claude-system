@@ -151,6 +151,7 @@ function parseFM(text) {
     key = m[1];
     const v = m[2].trim();
     if (v === "") out.fm[key] = out.fm[key] || [];
+    else if (/^(null|~|Null|NULL)$/.test(v)) { /* YAML null — leave the field absent so it doesn't render as a "null" value/link */ }
     else if (/^\[.*\]$/.test(v)) out.fm[key] = v.slice(1, -1).split(",").map(s => strip(s.trim())).filter(Boolean);
     else out.fm[key] = strip(v);
   }
@@ -204,7 +205,15 @@ function md(src) {
       const want = ul ? "ul" : "ol";
       if (listType && listType !== want) closeList();
       if (!listType) { listType = want; html += `<${want}>`; }
-      html += `<li>${inline((ul || ol)[1])}</li>`; i++; continue; }
+      let item = (ul || ol)[1]; i++;
+      // lazy continuation: fold wrapped (non-blank, non-block) lines into this item
+      while (i < lines.length && lines[i].trim() &&
+             !/^\s*[-*]\s+/.test(lines[i]) && !/^\s*\d+\.\s+/.test(lines[i]) &&
+             !/^(#{1,6})\s+/.test(lines[i]) && !/^```/.test(lines[i]) &&
+             !/^\s*>\s?/.test(lines[i]) && !/^\s*([-*_])\1{2,}\s*$/.test(lines[i])) {
+        item += " " + lines[i].trim(); i++;
+      }
+      html += `<li>${inline(item)}</li>`; continue; }
     closeList(); para.push(ln.trim()); i++;
   }
   flushPara(); closeList();
