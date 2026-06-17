@@ -200,6 +200,35 @@ function md(src) {
     if (/^\s*>\s?/.test(ln)) { flushPara(); closeList();
       const buf = []; while (i < lines.length && /^\s*>\s?/.test(lines[i])) buf.push(lines[i++].replace(/^\s*>\s?/, ""));
       html += `<blockquote>${md(buf.join("\n"))}</blockquote>`; continue; }
+    // GFM pipe table: a row containing | followed by a |---|:--:| separator row
+    if (/\|/.test(ln) && i + 1 < lines.length &&
+        /^\s*\|?(\s*:?-+:?\s*\|)+\s*:?-+:?\s*\|?\s*$/.test(lines[i + 1])) {
+      flushPara(); closeList();
+      const cells = r => { // split on unescaped pipes outside code spans; drop the optional leading/trailing one
+        const s = r.trim().replace(/^\|/, "").replace(/\|$/, ""), out = []; let cur = "", code = false;
+        for (let k = 0; k < s.length; k++) {
+          const ch = s[k];
+          if (ch === "`") { code = !code; cur += ch; }
+          else if (ch === "\\" && s[k + 1] === "|") { cur += "|"; k++; }
+          else if (ch === "|" && !code) { out.push(cur); cur = ""; }
+          else cur += ch;
+        }
+        out.push(cur); return out.map(c => c.trim());
+      };
+      const header = cells(lines[i]);
+      const aligns = cells(lines[i + 1]).map(c => {
+        const l = c.startsWith(":"), rt = c.endsWith(":");
+        return l && rt ? "center" : rt ? "right" : l ? "left" : "";
+      });
+      const al = j => aligns[j] ? ` style="text-align:${aligns[j]}"` : "";
+      i += 2;
+      let t = "<table><thead><tr>" + header.map((h, j) => `<th${al(j)}>${inline(h)}</th>`).join("") + "</tr></thead><tbody>";
+      while (i < lines.length && lines[i].trim() && /\|/.test(lines[i])) {
+        const row = cells(lines[i++]);
+        t += "<tr>" + header.map((_, j) => `<td${al(j)}>${inline(row[j] || "")}</td>`).join("") + "</tr>";
+      }
+      html += t + "</tbody></table>"; continue;
+    }
     let ul = ln.match(/^\s*[-*]\s+(.*)$/), ol = ln.match(/^\s*\d+\.\s+(.*)$/);
     if (ul || ol) { flushPara();
       const want = ul ? "ul" : "ol";
