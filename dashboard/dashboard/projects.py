@@ -356,23 +356,48 @@ def list_concepts(name: str) -> list[dict]:
 _WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]")
 
 
+def _wiki_target_href(target: str, project_name: str) -> Optional[str]:
+    """Resolve a wikilink target to a dashboard URL, mirroring the GitHub Pages
+    viewer's wikiHref: explicit ``concepts/`` / ``literature/`` / ``mocs/``
+    prefixes, plus a *bare* name (e.g. ``closed-loop-geometric-verification``)
+    defaulting to a concept — which is how cross-references are written in the
+    notes. Returns ``None`` when the target doesn't resolve to a page that
+    actually exists, so the caller can render plain text instead of a dead link.
+    """
+    root = PROJECTS_ROOT / project_name
+    t = re.sub(r"\.md$", "", target.strip())
+
+    if t.startswith("concepts/"):
+        slug = t[len("concepts/"):].split("/")[-1]
+        if (root / "concepts" / f"{slug}.md").exists():
+            return f"/project/{project_name}/concepts/{slug}"
+        return None
+    if t.startswith("literature/"):
+        rel = t[len("literature/"):] + ".md"
+        if (root / "literature" / rel).exists():
+            return f"/project/{project_name}/literature/{rel}"
+        return None
+    if t.startswith("mocs/"):
+        return None  # the dashboard has no MoC page — don't fabricate a dead link
+    # bare name → concept (the viewer's default, and the common cross-ref form)
+    slug = t.split("/")[-1]
+    if (root / "concepts" / f"{slug}.md").exists():
+        return f"/project/{project_name}/concepts/{slug}"
+    return None
+
+
 def _render_wikilinks(html_or_text: str, project_name: str) -> str:
-    """Turn [[concepts/foo]] and [[literature/papers/bar]] into dashboard links."""
+    """Turn [[concepts/foo]], [[literature/papers/bar]], and bare [[foo]] into
+    dashboard links. Unresolved targets render as plain label text (no link, no
+    literal ``[[ ]]`` brackets)."""
 
     def repl(m: re.Match) -> str:
         target = m.group(1).strip()
         label = (m.group(2) or target).strip()
-        if target.startswith("concepts/"):
-            slug = target[len("concepts/"):]
-            href = f"/project/{project_name}/concepts/{slug}"
-        elif target.startswith("literature/"):
-            rel = target[len("literature/"):]
-            if not rel.endswith(".md"):
-                rel = rel + ".md"
-            href = f"/project/{project_name}/literature/{rel}"
-        else:
-            return m.group(0)
-        return f'<a href="{href}">{label}</a>'
+        href = _wiki_target_href(target, project_name)
+        if href:
+            return f'<a class="wiki" href="{href}">{label}</a>'
+        return label
 
     return _WIKILINK_RE.sub(repl, html_or_text)
 

@@ -77,6 +77,11 @@ a {
 }
 a:hover { color: var(--accent-hover); border-bottom-color: currentColor; }
 
+/* internal cross-references ([[wikilinks]]) — distinct from external links,
+   mirrors the GitHub Pages viewer's wiki-link styling */
+a.wiki { color: #7c3aed; }            /* violet-600 — 5.6:1 on bg */
+a.wiki:hover { color: #6d28d9; border-bottom-color: currentColor; }
+
 code, pre, .mono { font-family: var(--font-mono); font-variant-ligatures: none; }
 
 button {
