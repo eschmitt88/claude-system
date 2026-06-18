@@ -377,12 +377,24 @@ def _wiki_target_href(target: str, project_name: str) -> Optional[str]:
         if (root / "literature" / rel).exists():
             return f"/project/{project_name}/literature/{rel}"
         return None
+    if t.startswith("experiments/"):
+        slug = t[len("experiments/"):].split("/")[0]
+        if (root / "experiments" / slug).is_dir():
+            return f"/project/{project_name}/experiment/{slug}"
+        return None
     if t.startswith("mocs/"):
         return None  # the dashboard has no MoC page — don't fabricate a dead link
-    # bare name → concept (the viewer's default, and the common cross-ref form)
+    # bare name (e.g. [[2026-06-16-snap-fit-enclosure]]) — disambiguate against the
+    # tree: an experiment folder wins, then a concept, then a literature note by slug.
     slug = t.split("/")[-1]
+    if (root / "experiments" / slug).is_dir():
+        return f"/project/{project_name}/experiment/{slug}"
     if (root / "concepts" / f"{slug}.md").exists():
         return f"/project/{project_name}/concepts/{slug}"
+    lit = root / "literature"
+    if lit.exists():
+        for f in lit.rglob(f"{slug}.md"):
+            return f"/project/{project_name}/literature/{f.relative_to(lit)}"
     return None
 
 
@@ -592,7 +604,7 @@ def search_all(q: str, limit: int = 20) -> list[dict]:
                         "kind": "experiment",
                         "title": p.name,
                         "where": name + (" · " + hyp[:60] + "…" if hyp else ""),
-                        "url": f"/project/{name}",
+                        "url": f"/project/{name}/experiment/{p.name}",
                     }))
     hits.sort(key=lambda h: -h[0])
     return [h[1] for h in hits[:limit]]
@@ -672,4 +684,51 @@ def read_concept(name: str, slug: str) -> Optional[dict]:
         "frontmatter": fm,
         "html": render_markdown(body, name),
         "literature_backrefs": sorted(backrefs),
+    }
+
+
+@ttl_cache(seconds=20)
+def read_experiment(name: str, slug: str) -> Optional[dict]:
+    """One experiment folder rendered for detail view: README body + frontmatter,
+    metrics.json (validation, the search signal) and final_metrics.json (held-out),
+    plus back-references from notes/concepts that wikilink it."""
+    exp_root = (PROJECTS_ROOT / name / "experiments").resolve()
+    target = (exp_root / slug).resolve()
+    # Path-traversal guard: must be a direct child folder of experiments/.
+    if target.parent != exp_root or not target.is_dir():
+        return None
+    readme = target / "README.md"
+    if not readme.exists():
+        return None
+    fm, body = _read_frontmatter_text(readme)
+
+    def _read_json(p: Path) -> dict:
+        if not p.exists():
+            return {}
+        try:
+            return json.loads(p.read_text() or "{}")
+        except json.JSONDecodeError:
+            return {}
+
+    backrefs: list[str] = []
+    proj_root = PROJECTS_ROOT / name
+    for sub in ("literature", "concepts"):
+        d = proj_root / sub
+        if not d.exists():
+            continue
+        for f in d.rglob("*.md"):
+            try:
+                txt = f.read_text()
+            except OSError:
+                continue
+            if f"[[{slug}]]" in txt or f"[[experiments/{slug}" in txt:
+                backrefs.append(str(f.relative_to(proj_root)))
+
+    return {
+        "slug": slug,
+        "frontmatter": fm,
+        "html": render_markdown(body, name),
+        "metrics": _read_json(target / "metrics.json"),
+        "final_metrics": _read_json(target / "final_metrics.json"),
+        "backrefs": sorted(backrefs),
     }

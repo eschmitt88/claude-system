@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+{% set fm = exp.frontmatter %}
+<h1>{{ fm.slug or exp.slug }}</h1>
+<div class="subtitle"><a href="/project/{{ project }}">← {{ project }} overview</a> · <code>experiments/{{ exp.slug }}/README.md</code></div>
+
+<div style="display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start;">
+  <section class="note-body">
+    {{ exp.html|safe }}
+  </section>
+
+  <aside>
+    <table class="kv">
+      {% if fm.status %}<tr><th>status</th><td><span class="tag">{{ fm.status }}</span></td></tr>{% endif %}
+      {% if fm.date %}<tr><th>date</th><td class="mono">{{ fm.date }}</td></tr>{% endif %}
+      {% if fm.result %}<tr><th>result</th><td>{{ fm.result }}</td></tr>{% endif %}
+      {% if fm.hypothesis %}<tr><th>hypothesis</th><td>{{ fm.hypothesis }}</td></tr>{% endif %}
+      {% if fm.tags %}<tr><th>tags</th><td>{% for t in fm.tags %}<span class="tag">{{ t }}</span>{% endfor %}</td></tr>{% endif %}
+      {% if fm.related_concepts %}
+      <tr><th>concepts</th><td>
+        {% for c in fm.related_concepts %}<div>{{ c|safe }}</div>{% endfor %}
+      </td></tr>
+      {% endif %}
+      {% if exp.backrefs %}
+      <tr><th>cited by</th><td>
+        {% for r in exp.backrefs %}<div style="margin-bottom:4px;"><code>{{ r }}</code></div>{% endfor %}
+      </td></tr>
+      {% endif %}
+    </table>
+
+    {% if exp.metrics %}
+    <h3 style="margin-top:20px;">metrics.json <span class="fine">(validation)</span></h3>
+    <table class="kv">
+      {% for k, v in exp.metrics.items() %}
+      {% if v is number or v is string or v is boolean %}
+      <tr><th class="mono">{{ k }}</th><td class="mono">{{ v }}</td></tr>
+      {% endif %}
+      {% endfor %}
+    </table>
+    {% endif %}
+
+    {% if exp.final_metrics %}
+    <h3 style="margin-top:20px;">final_metrics.json <span class="fine">(held-out)</span></h3>
+    <table class="kv">
+      {% for k, v in exp.final_metrics.items() %}
+      {% if v is number or v is string or v is boolean %}
+      <tr><th class="mono">{{ k }}</th><td class="mono">{{ v }}</td></tr>
+      {% endif %}
+      {% endfor %}
+    </table>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

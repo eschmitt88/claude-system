@@ -178,7 +178,14 @@ function wikiHref(t) {
   if (t.startsWith("concepts/")) return `#/concept/${t.split("/").pop()}`;
   if (t.startsWith("literature/")) return `#/note/${t}.md`;
   if (t.startsWith("mocs/")) return `#/moc/${t.split("/").pop()}`;
-  return `#/concept/${t.split("/").pop()}`;
+  if (t.startsWith("experiments/")) return `#/experiment/${t.split("/")[1]}`;
+  // bare name (e.g. [[2026-06-16-snap-fit-enclosure]]) — disambiguate against the
+  // file tree: an experiment folder wins, then a literature note by slug, else concept.
+  const slug = t.split("/").pop();
+  if (state.paths.some(p => p.startsWith(`experiments/${slug}/`))) return `#/experiment/${slug}`;
+  const note = state.paths.find(p => p.startsWith("literature/") && p.endsWith(`/${slug}.md`));
+  if (note) return `#/note/${note}`;
+  return `#/concept/${slug}`;
 }
 function md(src) {
   const lines = (src || "").split("\n");

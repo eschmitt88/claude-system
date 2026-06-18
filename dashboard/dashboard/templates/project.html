@@ -53,7 +53,7 @@
   <tbody>
     {% for c in cycles %}
     <tr>
-      <td><code>{{ c.slug }}</code></td>
+      <td><a href="/project/{{ project }}/experiment/{{ c.slug }}"><code>{{ c.slug }}</code></a></td>
       <td>{{ c.status }}</td>
       <td>
         {% if c.metrics %}
