@@ -44,6 +44,7 @@ from .projects import (
     project_dashboard_dir,
     project_status,
     read_concept,
+    read_experiment,
     read_literature_note,
     search_all,
     snippet_for_concept,
@@ -319,6 +320,18 @@ def project_literature_note(request: Request, name: str, relpath: str):
         request,
         "literature_note.html",
         _ctx({"active": "literature", "project": name, "note": note}),
+    )
+
+
+@app.get("/project/{name}/experiment/{slug}", response_class=HTMLResponse)
+def project_experiment(request: Request, name: str, slug: str):
+    exp = read_experiment(name, slug)
+    if exp is None:
+        return HTMLResponse("experiment not found", status_code=404)
+    return TEMPLATES.TemplateResponse(
+        request,
+        "experiment.html",
+        _ctx({"active": "overview", "project": name, "exp": exp}),
     )
 
 
