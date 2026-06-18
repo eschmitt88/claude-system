@@ -180,9 +180,11 @@ function wikiHref(t) {
   if (t.startsWith("mocs/")) return `#/moc/${t.split("/").pop()}`;
   if (t.startsWith("experiments/")) return `#/experiment/${t.split("/")[1]}`;
   // bare name (e.g. [[2026-06-16-snap-fit-enclosure]]) — disambiguate against the
-  // file tree: an experiment folder wins, then a literature note by slug, else concept.
+  // file tree in the same order as the dashboard: experiment folder > concept >
+  // literature note by slug, else default to a concept link.
   const slug = t.split("/").pop();
   if (state.paths.some(p => p.startsWith(`experiments/${slug}/`))) return `#/experiment/${slug}`;
+  if (state.paths.includes(`concepts/${slug}.md`)) return `#/concept/${slug}`;
   const note = state.paths.find(p => p.startsWith("literature/") && p.endsWith(`/${slug}.md`));
   if (note) return `#/note/${note}`;
   return `#/concept/${slug}`;
