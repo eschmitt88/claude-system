@@ -42,6 +42,16 @@ would be searched without writing).
    Use your judgment on how to split — one per active theme is a
    good default.
 
+   **Form matters: write each query as a 3–5 sentence natural-language
+   scenario, not a keyword pile.** Describe what you are looking for — the
+   problem, the kind of method or result, the context — in prose, as you
+   would brief a research assistant. Short keyword-style queries
+   (`topic1 topic2 topic3`) measurably degrade scientific retrieval;
+   scenario-rich queries surface the evidence that lives in appendices,
+   ablations, and citation contexts. Breadth comes from query count/spread,
+   depth from query form. (Evidence: AutoResearchBench — see
+   agentic-research `web-grounded-literature` concept.)
+
 4. **Run each query** via `WebSearch`, filter on recency inside the
    window. Deduplicate against URLs already present in
    `raw/_candidates/**/*.md` and `literature/**/*.md` (read the files
