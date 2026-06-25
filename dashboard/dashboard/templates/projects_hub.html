@@ -66,6 +66,29 @@
 <div class="card-empty">No projects yet — <code>cd ~/projects/research && claude</code>, then <code>/new-project &lt;slug&gt;</code>.</div>
 {% endif %}
 
+{% if external %}
+<h2>Other projects &amp; services</h2>
+<p class="subtitle">Projects outside <code>~/projects/research/</code> (not auto-discovered) and their live endpoints. Full catalog on the <a href="/ports">Ports</a> page.</p>
+<div class="external-projects">
+  {% for e in external %}
+  <div class="ext-row">
+    <div class="ext-meta">
+      <span class="project-name">{{ e.name }}</span>
+      {% if e.description %}<div class="ext-desc">{{ e.description }}</div>{% endif %}
+      <div class="ext-path mono">{{ e.path }}</div>
+    </div>
+    {% if e.url %}<a class="btn primary" href="{{ e.url }}" target="_blank" rel="noopener">Open ↗</a>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+<style>
+.external-projects { display: flex; flex-direction: column; gap: .5rem; margin: .5rem 0 1.4rem; }
+.ext-row { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .7rem 1rem; border: 1px solid var(--border, #232833); border-radius: 8px; }
+.ext-desc { font-size: .85rem; opacity: .8; margin: .2rem 0; }
+.ext-path { font-size: .75rem; opacity: .5; }
+</style>
+{% endif %}
+
 <h2>How this works</h2>
 <div class="card hub-explainer">
   <p>Each project may declare an interactive dashboard via a <code>dashboard.yaml</code> manifest. Two kinds are recognized:</p>
