@@ -40,9 +40,12 @@
             {% if r.dashboard.kind == "static" %}
               <a class="btn primary" href="/projects/{{ r.name }}/dashboard/" target="_blank" rel="noopener">Open dashboard ↗</a>
             {% elif r.dashboard.kind == "server" %}
-              <span class="btn disabled" title="Server-backed dashboards not yet supported. Add a start/stop button here once Tier-2 lands.">Start (not yet wired)</span>
-              {% if r.dashboard.port %}
-              <span class="port-hint mono">port {{ r.dashboard.port }}</span>
+              {% if r.dashboard.live %}
+                <a class="btn primary" href="{{ r.dashboard.url or ('http://aiserver2026:' ~ r.dashboard.port ~ '/') }}" target="_blank" rel="noopener">Open ↗</a>
+                <span class="port-hint mono"><span class="dot up"></span>running · port {{ r.dashboard.port }}</span>
+              {% else %}
+                <span class="btn disabled" title="Service not responding on its port. Start it: {{ r.dashboard.start or 'see dashboard.yaml' }}">Not running</span>
+                <span class="port-hint mono"><span class="dot down"></span>port {{ r.dashboard.port }}</span>
               {% endif %}
             {% endif %}
           </div>
@@ -198,7 +201,10 @@
 .btn.primary:hover { background: var(--accent-hover); color: white; }
 .btn.disabled { opacity: .5; cursor: not-allowed; }
 
-.port-hint { font-size: 11px; color: var(--ink-3); }
+.port-hint { font-size: 11px; color: var(--ink-3); display: inline-flex; align-items: center; gap: 4px; }
+.port-hint .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; }
+.port-hint .dot.up { background: #22c55e; }
+.port-hint .dot.down { background: #ef4444; }
 .dashboard-tags { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
 .tag {
   font-size: 10px;
