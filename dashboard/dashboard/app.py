@@ -51,6 +51,7 @@ from .projects import (
     snippet_for_literature,
     tokens_per_day,
 )
+from .ports import registry as ports_registry, extra_projects
 
 BASE = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(BASE / "templates"))
@@ -199,7 +200,8 @@ def home(request: Request):
 
 @app.get("/projects-hub", response_class=HTMLResponse)
 def projects_hub(request: Request):
-    """Lists every research project with its dashboard status (if any)."""
+    """Lists every research project with its dashboard status (if any), plus
+    external (non-research) projects from the service registry."""
     projects = list_projects()
     rollup = {p["name"]: p for p in all_project_status()}
     rows = []
@@ -209,7 +211,18 @@ def projects_hub(request: Request):
     return TEMPLATES.TemplateResponse(
         request,
         "projects_hub.html",
-        _ctx({"active": "projects", "rows": rows}),
+        _ctx({"active": "projects", "rows": rows,
+              "external": extra_projects()}),
+    )
+
+
+@app.get("/ports", response_class=HTMLResponse)
+def ports(request: Request):
+    """Service & port registry with live status."""
+    return TEMPLATES.TemplateResponse(
+        request,
+        "ports.html",
+        _ctx({"active": "ports", "reg": ports_registry()}),
     )
 
 

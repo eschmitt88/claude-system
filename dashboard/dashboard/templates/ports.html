@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Ports &amp; services</h1>
+<p class="subtitle">Single source of truth: <code>{{ reg.path }}</code>. Each concrete port is live-probed on <code>127.0.0.1</code>. Host <code>{{ reg.host }}</code> · LAN <code>{{ reg.lan_ip }}</code> · Tailscale <code>{{ reg.tailscale_ip }}</code>.</p>
+
+<h2>Reserved blocks</h2>
+<div class="port-blocks">
+  {% for b in reg.blocks %}
+  <div class="port-block">
+    <span class="port-range mono">{{ b.range }}</span>
+    <span class="port-owner">{{ b.owner }}</span>
+    <span class="port-purpose">{{ b.purpose }}</span>
+  </div>
+  {% endfor %}
+</div>
+
+<h2>Services</h2>
+<table class="ports-table">
+  <thead><tr><th>Port</th><th>Status</th><th>Service</th><th>Project</th><th>Bind</th><th>URL / note</th></tr></thead>
+  <tbody>
+  {% for s in reg.services %}
+    <tr>
+      <td class="mono">{{ s.port }}</td>
+      <td>
+        {% if s.status == 'up' %}<span class="dot up" title="listening"></span>up
+        {% elif s.status == 'down' %}<span class="dot down" title="not listening"></span>down
+        {% else %}<span class="dot reserved" title="range / reserved"></span>reserved{% endif %}
+      </td>
+      <td>{{ s.name }}</td>
+      <td class="mono">{{ s.project }}</td>
+      <td>{{ s.bind or '—' }}</td>
+      <td>
+        {% if s.url %}<a href="{{ s.url }}" target="_blank" rel="noopener">{{ s.url }}</a>{% endif %}
+        {% if s.note %}<div class="port-note">{{ s.note }}</div>{% endif %}
+        {% if s.unit %}<span class="port-unit mono">{{ s.unit }}</span>{% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<p class="hub-foot">To allocate or move a port, edit <code>{{ reg.path }}</code> and restart the service. Keep ports inside their owning block.</p>
+
+<style>
+.port-blocks { display: flex; flex-wrap: wrap; gap: .5rem; margin: .5rem 0 1.2rem; }
+.port-block { display: flex; flex-direction: column; gap: .15rem; padding: .5rem .8rem; border: 1px solid var(--border, #2a2f3a); border-radius: 8px; min-width: 180px; }
+.port-range { font-weight: 600; }
+.port-owner { font-size: .85rem; opacity: .9; }
+.port-purpose { font-size: .78rem; opacity: .65; }
+.ports-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+.ports-table th, .ports-table td { text-align: left; padding: .45rem .6rem; border-bottom: 1px solid var(--border, #232833); vertical-align: top; }
+.ports-table th { font-size: .78rem; text-transform: uppercase; letter-spacing: .03em; opacity: .6; }
+.dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; margin-right: .35rem; vertical-align: middle; }
+.dot.up { background: #22c55e; } .dot.down { background: #ef4444; } .dot.reserved { background: #9ca3af; }
+.port-note { font-size: .78rem; opacity: .65; margin-top: .15rem; }
+.port-unit { font-size: .75rem; opacity: .55; display: inline-block; margin-top: .2rem; }
+</style>
+{% endblock %}
