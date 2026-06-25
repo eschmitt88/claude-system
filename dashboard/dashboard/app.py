@@ -202,11 +202,16 @@ def home(request: Request):
 def projects_hub(request: Request):
     """Lists every research project with its dashboard status (if any), plus
     external (non-research) projects from the service registry."""
+    from .ports import _port_up
     projects = list_projects()
     rollup = {p["name"]: p for p in all_project_status()}
     rows = []
     for p in projects:
         st = rollup.get(p["name"], {})
+        dash = p.get("dashboard")
+        # Live-probe server-kind dashboards so the hub reflects reality.
+        if dash and dash.get("kind") == "server" and isinstance(dash.get("port"), int):
+            dash["live"] = _port_up(dash["port"])
         rows.append({**p, "status": st})
     return TEMPLATES.TemplateResponse(
         request,

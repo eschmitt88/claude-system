@@ -66,6 +66,7 @@ def _read_dashboard_manifest(project_root: Path) -> Optional[dict]:
             "description": data.get("description", ""),
             "tags": data.get("tags", []) or [],
             "port": data.get("port"),
+            "url": data.get("url"),
             "start": data.get("start"),
             "manifest_path": str(c),
             "served_dir": str(served_dir),
