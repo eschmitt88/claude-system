@@ -89,6 +89,14 @@ repos `/digest` already runs `/promote-moc` after each ingest burst, so
 this check is mostly a backstop there; in `standard` repos it's the
 prompt for the user to promote by hand.)
 
+Consolidation counterpart (report-only): a cluster that is *already*
+covered by an existing MoC but keeps accreting near-duplicate concepts
+is a consolidation signal, not a new-MoC signal — flag it for a human to
+merge/retire rather than promoting anything. The append-only graph has no
+other over-growth check; this is the minimal one. (A fuller pairwise
+merge/split detector — check "5b" — is deferred until the graph is large
+enough to need it; see agentic-research `docs/system-proposals/2026-06-28-lint-consolidation-check.md`.)
+
 ### 6. Stale candidates
 
 Files **directly** under `raw/_candidates/` (not the `_done/` archive)
