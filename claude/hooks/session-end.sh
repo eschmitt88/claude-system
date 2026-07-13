@@ -76,6 +76,26 @@ if [ -n "$exp_dir" ] && [ -f "$exp_dir/README.md" ] && [ -f "$root/_meta/log.md"
   fi
 fi
 
+# Commit the daily journal in every git repo — scoped to journal/ so no
+# unrelated working-tree state gets swept in. Git is the memory layer;
+# a hook-written file nothing commits is leftover dirt (same root cause
+# as the old _meta/log.md session_end append). Push immediately:
+# committed-but-unpushed is leftover state by this system's rules. A
+# failed push self-heals — the next session end commits a new journal
+# line and the push retries, carrying anything stranded.
+if [ -d "$root/.git" ]; then
+  if [ -n "$(git -C "$root" status --porcelain -- journal/ 2>/dev/null)" ]; then
+    journal_err="$HOME/.claude/hooks/auto-push.err"
+    if git -C "$root" add -- journal/ 2>>"$journal_err" \
+       && git -C "$root" commit --quiet -m "journal: session $date_local" -- journal/ 2>>"$journal_err"; then
+      if git -C "$root" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' >/dev/null 2>&1; then
+        GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5" \
+          timeout 30 git -C "$root" push --quiet 2>>"$journal_err" || true
+      fi
+    fi
+  fi
+fi
+
 # Optional auto-push to the project's git remote. Opt-in only.
 # Two opt-in schemas supported:
 #   1. Legacy: project.yaml at project root with `auto_push: true` at top level.

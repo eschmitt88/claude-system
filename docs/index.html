@@ -267,7 +267,7 @@
       <tr><td>Stop</td><td class="mono">token_logger.sh</td><td>Writes a <code>token_events</code> row to <code>state.db</code> per turn (usage passed as argv, not stdin).</td></tr>
       <tr><td>PostToolUse <span class="mono" style="font-size:11px">(Write)</span></td><td class="mono">status_emit.sh</td><td>Emits a status signal whenever a file is written.</td></tr>
       <tr><td>PreToolUse</td><td class="mono">pretooluse_cap.sh</td><td>Safety net: blocks further tool calls once a declared token ceiling is exceeded. Backstop, not primary control.</td></tr>
-      <tr><td>SessionEnd</td><td class="mono">session-end.sh</td><td>Writes the daily journal, backstops <code>/wrap</code>, and (opt-in via <code>budget.yaml git.auto_push</code>) commits + pushes the project, retrying leftover unpushed commits.</td></tr>
+      <tr><td>SessionEnd</td><td class="mono">session-end.sh</td><td>Writes the daily journal and commits + pushes it (scoped to <code>journal/</code>) in every git repo, backstops <code>/wrap</code>, and (opt-in via <code>budget.yaml git.auto_push</code>) commits + pushes the full project, retrying leftover unpushed commits.</td></tr>
     </tbody>
   </table>
 </section>
