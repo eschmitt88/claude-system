@@ -44,6 +44,9 @@ if [ -n "$transcript" ] && [ -f "$transcript" ]; then
 fi
 
 # 1. Legacy per-project NDJSON log — only when inside a project.
+#    Gitignored in projects (appended every turn, so it can never stay
+#    committed-clean); /iterate and /lint read it from the local tree.
+#    state.db below is the durable copy.
 if [ -n "$project_root" ]; then
   printf '%s\n' "$(jq -n --arg t "$ts" --arg s "${session_id:-unknown}" --argjson u "$usage" \
     '{timestamp:$t,session_id:$s} + $u')" >> "$project_root/_meta/token_log.ndjson"
