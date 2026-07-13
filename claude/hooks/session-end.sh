@@ -45,10 +45,9 @@ fi
 
 printf -- '- %s session_end session=%s\n' "$time_local" "${session_id:-unknown}" >> "$file"
 
-# Also append a one-liner to _meta/log.md for audit.
-if [ -f "$root/_meta/log.md" ]; then
-  printf '%s %s session_end session=%s\n' "$date_local" "$time_local" "${session_id:-unknown}" >> "$root/_meta/log.md"
-fi
+# NOTE: no session_end line in _meta/log.md. The journal line above is the
+# session marker; a tracked-file append at SessionEnd lands after the last
+# commit and leaves the repo permanently dirty in non-auto_push projects.
 
 # If the session ended inside an experiment folder whose README.md has
 # an unfilled ## Diagnostics section, log a TODO for /lint to surface.
