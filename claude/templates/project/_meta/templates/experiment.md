@@ -9,7 +9,7 @@ related_concepts: []
 related_literature: []
 tags: []
 # members: only set when kind: ensemble — list parent experiment slugs.
-# parent:  only set when this experiment was produced via /expand.
+# parent:  only set when this experiment was produced via /propose --expand.
 ---
 
 # {{SLUG}}

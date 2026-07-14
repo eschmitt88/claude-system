@@ -16,6 +16,14 @@ Scaffold a new research project.
   (GitHub Pages on a private repo needs a paid plan). Pass `--private`
   when the work must not be public; the Pages step is then skipped with
   a note.
+- `--experiments` — this project will run experiments: link the
+  experiment-loop skill group (`/propose`, `/implement`, `/iterate`,
+  `/new-experiment`, `/derive-experiment`) into the project. If the
+  user's request makes the project's shape obvious (e.g. "a project to
+  train X" vs "a lit review of Y"), infer this flag rather than asking.
+  Lit/web-research-only projects omit it and stay lean; they can
+  graduate later (see "Growing a lit repo into an experimenting one"
+  in the claude-system README).
 
 ## Steps
 
@@ -48,6 +56,13 @@ Scaffold a new research project.
 
    `uv init` drops a `pyproject.toml`. Leave `.python-version`
    untouched if uv creates one.
+
+   With `--experiments`, also link the experiment-loop skill group so
+   it lands in the initial commit:
+
+   ```sh
+   ln -s ~/claude-system/claude/skills-experiment .claude/skills
+   ```
 
 5. **Initial commit**:
 

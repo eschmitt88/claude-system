@@ -1,6 +1,6 @@
 ---
 name: iterate
-description: One propose→implement loop cycle per invocation. Reads the latest implemented experiment's Diagnostics section, picks the strongest next_candidate, runs the /propose logic seeded with that candidate, presents the proposal, and pauses for user approval. On approval calls /implement. --experiment <path> targets a specific experiment; --chain <N> repeats up to N times without pausing; --chain-until <cond> halts on a budget / metric / count threshold. Reads budget.yaml as implicit halting conditions each cycle. Appends every cycle to _meta/iteration_log.md.
+description: One propose→implement loop cycle per invocation. Reads the latest implemented experiment's Diagnostics section, picks the strongest next_candidate, runs the /propose logic seeded with that candidate, presents the proposal, and pauses for user approval. On approval calls /implement. --experiment <path> targets a specific experiment; --chain <N> repeats up to N times without pausing; --chain-until <cond> halts on a budget / metric / count threshold; --ensemble <slug...> [--strategy auto|voting|stacking|averaging] runs a single combination cycle over completed experiments sharing a metric (kind: ensemble, members: frontmatter). Reads budget.yaml as implicit halting conditions each cycle. Appends every cycle to _meta/iteration_log.md.
 respects:
   - ~/.claude/rules/evaluation.md
   - ~/.claude/rules/agency.md
@@ -20,6 +20,11 @@ in a chain under explicit halting conditions.
 - `--chain-until <condition>` — optional, repeatable. A halting
   condition string of the form `<key>:<op>:<value>`. Multiple
   conditions combine as **OR** — first to trip halts the chain.
+- `--ensemble <slug-1> <slug-2> ... [--strategy <name>]` — run a
+  single ensemble cycle over the named completed experiments instead
+  of seeding from Diagnostics (see Ensemble mode below). Strategy ∈
+  `auto | voting | stacking | averaging`, default `auto`. Not
+  combinable with `--chain`.
 
 ### Chain-until grammar
 
@@ -135,6 +140,45 @@ If budget.yaml is missing, chain on explicit `--chain N` /
 
 On halt, write one final line to `_meta/iteration_log.md` naming the
 halting reason and report it to the user.
+
+## Ensemble mode (`--ensemble <slug...> [--strategy <name>]`)
+
+One cycle whose "proposal" is *combine these members* (formerly the
+standalone `/ensemble` skill). Motivated by MLE-STAR (arXiv
+2506.15692): combining genuinely diverse members that target the same
+metric is one of the most reliable sources of headroom in autonomous
+ML loops. Two seeds of one config is noise reduction, not ensembling —
+that's `/implement --seeds N`.
+
+- **Members**: two or more experiments with `status: implemented` (or
+  `done`) sharing the same primary metric and validation split (the
+  HCE consistency clause). Read each member's README frontmatter,
+  `metrics.json` (**never** `final_metrics.json` — ensembling is
+  search-phase), and `results/` for per-example predictions
+  (`predictions.parquet`, `val_preds.csv`, or similar). Refuse — don't
+  fabricate, don't silently fall back to a weaker strategy — if any
+  member is missing, still running, metric-mismatched, or lacks the
+  predictions a strategy needs; name the offender.
+- **Strategy** (when `auto`): predictions + continuous metric →
+  averaging (or a learned blend if a held-out meta-split cleanly
+  exists); classification → voting (soft when probabilities are
+  present) or stacking with a clean meta-split. State the choice and
+  reasoning in one sentence in the new README's `## Setup`.
+- **Execution**: scaffold via `/new-experiment` with a slug naming the
+  members compactly (e.g. `ensemble-mlp-xgb`). README frontmatter
+  gains `kind: ensemble`, a `members:` list of slugs, and
+  `strategy:`. `config.yaml` points at member predictions;
+  `notes.qmd` computes the combined metric reproducibly. Run in the
+  main agent (ensembling is cheap — no subagent) and write the
+  combined number to the new experiment's `metrics.json` under the
+  members' metric name.
+- **Diagnostics**: fill honestly, as any cycle — did the combination
+  beat the best single member on validation and by how much (cite
+  `metrics.json`), which member drags, what to try next. A failed
+  ensemble is useful signal; mark `intended_effect_confirmed: no`.
+- **Logs**: `_meta/log.md` gets
+  `YYYY-MM-DD HH:MM iterate --ensemble <members...> → <slug> Δ<metric>=<delta>`,
+  plus the usual `_meta/iteration_log.md` line.
 
 ## Constraints
 
