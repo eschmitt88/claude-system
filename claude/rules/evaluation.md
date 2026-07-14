@@ -41,7 +41,10 @@ that touches `test/`.
 The only permitted access is a **final-scoring pass**, invoked
 explicitly at chain end (not inside `/iterate --chain` cycles),
 whose single job is to run the held-out evaluation and write
-`final_metrics.json`.
+`final_metrics.json`. That pass runs **once per chain** — never
+re-run it after further changes "to double-check," and never because
+the first number disappointed; a repeated final pass is search-phase
+access wearing a final-pass costume.
 
 If you are about to touch `test/` during a search-phase skill, stop
 and flag it to the user. `/lint` treats any `test/` access during
@@ -55,7 +58,13 @@ search as a hard failure, not a warning.
   is grounded in it.
 - `final_metrics.json` — **held-out test-split** metrics. Written
   only by the final-scoring pass. Nothing inside the search loop
-  reads it.
+  reads it. A test score, once read, is **spent**: whoever plans the
+  next chain has seen it, so any later chain on the same task is
+  partially *selected on the holdout*, and its own final score is no
+  longer an unbiased estimate. Keep final-scoring passes rare and
+  deliberate. When a task has accumulated several across chains, say
+  so wherever the held-out number is reported — it is exploratory at
+  that point, not confirmatory.
 
 This separation is what prevents the loop from overfitting to its
 own signal across many cycles. A Diagnostics field may reference
