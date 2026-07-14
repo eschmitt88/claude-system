@@ -18,10 +18,58 @@ import json
 import shutil
 import subprocess
 from datetime import datetime, time, timedelta, timezone
+from pathlib import Path
 from typing import Optional
 
-_TIMEOUT_S = 3
+_TIMEOUT_S = 8
 _BIN = "ccusage"
+# systemd user services get the stock PATH (/usr/bin:...), which does not
+# include the npm global prefix where ccusage lives — shutil.which() fails
+# there even though the binary is installed. Fall back to the known install
+# location so the dashboard service and cron-spawned coordinators find it.
+_BIN_FALLBACKS = (Path.home() / ".npm-global" / "bin" / "ccusage",)
+
+# ccusage --offline prices from a bundled LiteLLM snapshot that (as of
+# ccusage 20.x) has no entry for claude-fable-5, so Fable-only blocks come
+# back with costUSD 0. Estimate those locally. Rates are per MTok from the
+# published price list: Fable 5 is $10 in / $50 out (2x Opus 4.8's $5/$25);
+# cache read is 0.1x input, cache write (5m TTL) is 1.25x input.
+_FALLBACK_PRICING_PER_MTOK = {
+    "claude-fable-5": {
+        "input": 10.0,
+        "output": 50.0,
+        "cache_read": 1.0,
+        "cache_creation": 12.5,
+    },
+}
+
+
+def _resolve_bin() -> Optional[str]:
+    found = shutil.which(_BIN)
+    if found:
+        return found
+    for p in _BIN_FALLBACKS:
+        if p.is_file():
+            return str(p)
+    return None
+
+
+def _estimate_cost(counts: dict, models: list) -> Optional[float]:
+    """Cost estimate for a block ccusage priced at 0 because its offline
+    table doesn't know the model(s). Only returns a number when every model
+    in the block has a fallback entry — a mixed known/unknown block would
+    have costUSD > 0 already and never reaches this path."""
+    if not models or not all(m in _FALLBACK_PRICING_PER_MTOK for m in models):
+        return None
+    # Per-model token splits aren't exposed per block; with a single
+    # fallback model (the normal case) this is exact.
+    rates = _FALLBACK_PRICING_PER_MTOK[models[0]]
+    return (
+        counts.get("inputTokens", 0) * rates["input"]
+        + counts.get("outputTokens", 0) * rates["output"]
+        + counts.get("cacheReadInputTokens", 0) * rates["cache_read"]
+        + counts.get("cacheCreationInputTokens", 0) * rates["cache_creation"]
+    ) / 1_000_000
 
 # 5h Max-20x ceiling — known to be poorly calibrated because ccusage's
 # block window does not align with claude.ai's "current session" window
@@ -51,11 +99,12 @@ _WEEKLY_RESET_WEEKDAY = 0  # Monday
 
 
 def _run(args: list[str]) -> Optional[dict]:
-    if shutil.which(_BIN) is None:
+    bin_path = _resolve_bin()
+    if bin_path is None:
         return None
     try:
         proc = subprocess.run(
-            [_BIN, *args, "--json", "--offline"],
+            [bin_path, *args, "--json", "--offline"],
             capture_output=True,
             text=True,
             timeout=_TIMEOUT_S,
@@ -110,14 +159,19 @@ def active_block() -> Optional[dict]:
         except ValueError:
             pass
 
+    models = b.get("models") or []
+    cost_usd = b.get("costUSD")
+    if not cost_usd and total:
+        cost_usd = _estimate_cost(counts, models) or cost_usd
+
     return {
         "tokens": total,
         "input_tokens": counts.get("inputTokens", 0),
         "output_tokens": counts.get("outputTokens", 0),
         "cache_read_tokens": counts.get("cacheReadInputTokens", 0),
         "cache_creation_tokens": counts.get("cacheCreationInputTokens", 0),
-        "cost_usd": b.get("costUSD"),
-        "models": b.get("models") or [],
+        "cost_usd": cost_usd,
+        "models": models,
         "start_time": b.get("startTime"),
         "end_time": end,
         "remaining_minutes": remaining_min,
@@ -184,7 +238,10 @@ def weekly_anchored() -> Optional[dict]:
         output_t += tc.get("outputTokens", 0)
         cache_read += tc.get("cacheReadInputTokens", 0)
         cache_create += tc.get("cacheCreationInputTokens", 0)
-        cost += b.get("costUSD") or 0
+        block_cost = b.get("costUSD")
+        if not block_cost and b.get("totalTokens"):
+            block_cost = _estimate_cost(tc, b.get("models") or [])
+        cost += block_cost or 0
         n_blocks += 1
         end = b.get("endTime")
         if end:
