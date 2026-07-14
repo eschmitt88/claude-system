@@ -25,8 +25,8 @@ rule (`~/.claude/rules/evaluation.md`) before touching this skill.
 ## Evaluation discipline (HCE)
 
 **This is the one skill in the stack allowed to read from `test/`.**
-Everything inside `/iterate`, `/implement`, `/propose`, `/expand`,
-`/ensemble`, and `/mle-task` treats `test/` as off-limits. `/mle-score`
+Everything inside `/iterate` (including `--ensemble`), `/implement`,
+`/propose` (including `--expand`), and `/mle-task` treats `test/` as off-limits. `/mle-score`
 runs exactly once per experiment — the final-scoring pass — and
 writes `final_metrics.json`. The search-signal file (`metrics.json`)
 is not touched.

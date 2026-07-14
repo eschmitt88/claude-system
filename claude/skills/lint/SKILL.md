@@ -28,6 +28,13 @@ Then check HCE triggers (only meaningful in experiments mode):
   or with a `test/` symlink, or `evaluation_mode: hce` in the project
   `CLAUDE.md` / `budget.yaml`.
 
+In experiments mode, also verify the experiment-loop skill group is
+linked: `<project>/.claude/skills` should resolve to (or contain the
+skills of) `~/claude-system/claude/skills-experiment/`. Dated
+experiment folders with no linked group means the repo grew
+experiments without graduating — warn and point at the "Growing a lit
+repo into an experimenting one" checklist in the claude-system README.
+
 Report the detected mode at the top of the output so the user knows
 what was skipped:
 

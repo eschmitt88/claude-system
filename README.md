@@ -14,7 +14,8 @@ framework-level tour of every part and how they connect (source:
 | `claude/CLAUDE.md` | Durable user instructions (symlinked to `~/.claude/CLAUDE.md`). |
 | `claude/settings.json` | Claude Code settings (hooks, permissions). |
 | `claude/rules/` | Scoped rules auto-loaded by path (e.g. `evaluation.md` = HCE discipline). |
-| `claude/skills/` | Invocable slash-command skills (`/propose`, `/implement`, `/iterate`, `/headroom`, …). |
+| `claude/skills/` | Global slash-command skills — the knowledge-base group (`/discover`, `/ingest`, `/curate`, `/lint`, `/headroom`, …), loaded in every project. |
+| `claude/skills-experiment/` | The experiment-loop group (`/propose`, `/implement`, `/iterate`, `/new-experiment`, `/derive-experiment`) — **not** global; linked per-project via `<project>/.claude/skills` (see "Growing a lit repo" below). |
 | `claude/hooks/` | Lifecycle hooks (`SessionStart`, `Stop` = token logger, `PreToolUse` = safety net). |
 | `claude/templates/` | Project and note templates copied by `/new-project` / `/ingest`. |
 | `coordinator/` | Python package. `state.db` schema + writers, hardware poller, policy (`can_start`). |
@@ -167,6 +168,33 @@ i.e. reachable on the LAN at `http://<host>:8080`). Views: `/`
 (live now — loop sessions, live gauges, quota meters), `/queue`
 (coordinator queue), `/project/<name>` (per-project cycle table +
 DIAGNOSTICS). Auto-refreshes via SSE. Runs as a systemd user unit.
+
+## Growing a lit repo into an experimenting one
+
+The experiment-loop skills are scoped, not global, so a project's shape
+is a choice. Two ways it grows, decided by whether the experiments
+serve this repo's reading or start a new line of work:
+
+- **Spawn a downstream project** when the experiments have their own
+  identity (own data, own budget, many runs) or the concepts serve
+  more than one consumer: `/new-project --experiments`, then `@import`
+  the hub's concepts (the import contract writes `used_by:`
+  back-references).
+- **Graduate in place** when there is a single consumer and reading
+  and running are one thread:
+  1. `ln -s ~/claude-system/claude/skills-experiment .claude/skills`
+  2. Declare intent in `budget.yaml` (ceilings, `agency:`, model roles).
+  3. **Define the holdout before the first optimization run** —
+     `splits.yaml` + `test/` flips the HCE opt-in
+     (`claude/rules/evaluation.md`). The only order-sensitive step: a
+     holdout carved out after iterating against the data is
+     contaminated from birth.
+  4. `dvc init` if absent; `.worktrees/` for destructive runs.
+  5. First move: `/derive-experiment` on the ripest literature note.
+  6. Record the graduation in `docs/decisions/`.
+
+`/lint` warns when a repo has dated experiment folders but no linked
+experiment-loop group.
 
 ## Contributing / editing
 

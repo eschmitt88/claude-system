@@ -25,9 +25,9 @@ data scraping, analysis one-shots — can ignore this rule entirely.
 `/lint` skips HCE checks on such projects.
 
 When the rule applies, every skill that touches experiment state —
-`/propose`, `/implement`, `/iterate`, `/expand`, `/ensemble`,
-`/new-experiment`, and anything downstream — must obey the three
-clauses below. Their frontmatter lists this file under `respects:`
+`/propose` (including `--expand`), `/implement`, `/iterate` (including
+`--ensemble`), `/new-experiment`, and anything downstream — must obey
+the three clauses below. Their frontmatter lists this file under `respects:`
 as an explicit dependency declaration.
 
 ## 1. `test/` is off-limits during search
@@ -53,7 +53,7 @@ search as a hard failure, not a warning.
 ## 2. Two metric files per experiment
 
 - `metrics.json` — **validation-split** metrics. This is the search
-  signal. `/iterate` ranks on it; `/ensemble` picks members by it;
+  signal. `/iterate` ranks on it and picks ensemble members by it;
   `/lint` reads deltas from it; `/implement`'s Diagnostics section
   is grounded in it.
 - `final_metrics.json` — **held-out test-split** metrics. Written

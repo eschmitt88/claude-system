@@ -1,6 +1,6 @@
 ---
 name: propose
-description: Strategic ideation for the active research project — no implementation. Reads concepts/, the 10 most recently modified literature notes, and the 5 most recent experiment READMEs + their metrics.json. Emits one proposal file at experiments/_proposals/YYYY-MM-DD-<slug>.md with flat YAML frontmatter (hypothesis, rationale, reads, expected_metric, design_sketch, risks, related_prior, estimated_runtime, status) plus a prose argument. Does not scaffold an experiment, write code, or touch dvc.yaml.
+description: Strategic ideation for the active research project — no implementation. Reads concepts/, the 10 most recently modified literature notes, and the 5 most recent experiment READMEs + their metrics.json. Emits one proposal file at experiments/_proposals/YYYY-MM-DD-<slug>.md with flat YAML frontmatter (hypothesis, rationale, reads, expected_metric, design_sketch, risks, related_prior, estimated_runtime, status) plus a prose argument. --expand <proposal-path> [--n N] switches to breadth-first mode, emitting up to N (default 3) sibling proposals of an existing one under experiments/_proposals/_expansions/<parent-slug>/ with parent: and expansion_axis: frontmatter. Does not scaffold an experiment, write code, or touch dvc.yaml.
 respects:
   - ~/.claude/rules/evaluation.md
   - ~/.claude/rules/agency.md
@@ -17,6 +17,9 @@ output is a decision document.
 - `[<concept-or-moc>]` — optional. A concept name, MoC name, or path under
   `concepts/` or `mocs/`. If present, the proposal focuses on that theme.
   If absent, synthesize from the active `NOTES.md` tail.
+- `--expand <proposal-path> [--n N]` — switch to expand mode (below):
+  breadth-first siblings of an existing proposal instead of one new
+  proposal. Mutually exclusive with the concept/MoC argument.
 
 ## Steps
 
@@ -98,6 +101,37 @@ output is a decision document.
 - Does not spawn a subagent. Proposals are a main-context artifact so
   you can argue with them before committing compute.
 - Does not set `status:` to anything other than `proposed`.
+
+## Expand mode (`--expand <proposal-path> [--n N]`)
+
+Breadth-first ideation on a single hypothesis (formerly the standalone
+`/expand` skill): emit up to N (default **3**) sibling proposals that
+test the parent's claim via substantively different approaches —
+architecture, training regime, feature engineering, evaluation
+strategy, data scale, prior integration. You pick the axes; genuine
+diversity is the bar. Treat N as a cap — two children differing only
+in a hyperparameter are wasted slots, so emit fewer and say so rather
+than pad.
+
+Deltas from the default mode:
+
+- The parent must live under `experiments/_proposals/` (not `_done/`,
+  not `_failed/`) with `status: proposed`. Read it in full plus the
+  files in its `reads:` (one hop) so children ground in the same
+  evidence. **Do not modify the parent** — it stays individually
+  implementable.
+- Each child is an ordinary proposal (same frontmatter keys, body
+  rules, and step-6 confirmation as above; fresh `date:`,
+  `status: proposed`) plus two extra fields:
+  `parent: "<parent-slug>"` and
+  `expansion_axis: "<one-line label for what varies>"`.
+- Path: `experiments/_proposals/_expansions/<parent-slug>/<child-slug>.md`,
+  child slugs reflecting the axis (e.g. `…-ema`, `…-loss-mask`).
+- Log line: `YYYY-MM-DD HH:MM propose --expand <parent-slug> → <n> children`.
+
+Everything else — no scaffolding, no subagent, real `reads:` only, HCE
+discipline — applies unchanged. `/lint` flags children older than 7
+days with no `/implement` run.
 
 ## Notes
 
