@@ -84,11 +84,17 @@ def _estimate_cost(counts: dict, models: list) -> Optional[float]:
 # 5h % can underestimate by ~2-3x in practice.
 MAX_20X_5H_TOKEN_LIMIT = 184_000_000
 
-# Calibrated 2026-05-22 from a reset-anchored 4-day window: 231M tokens =
-# 10% used → ~2.31B per week. The window is large enough that block-
-# boundary noise is small (<1%), so this is the better-calibrated of the
-# two constants. Used for the dashboard weekly bar.
-MAX_20X_WEEKLY_TOKEN_LIMIT = 2_310_000_000
+# Weekly Max-20x ceiling in ccusage tokens. Reset-anchored calibration
+# history (user-reported claude.ai % vs summed window tokens):
+#   2026-05-22: 231.0M  = 10% → ~2.31B/week (Opus-era model mix)
+#   2026-07-15: 513.08M = 53% → ~968M/week  (Fable-5-dominant mix)
+# The implied ceiling moved ~2.4x between the two points, consistent with
+# Fable 5 costing 2x Opus per token — the underlying quota is almost
+# certainly cost-weighted, so this token-denominated constant is only
+# valid for the current model mix. (Cost cross-check at the 2026-07-15
+# point: $200.39 window cost = 53% → implied ~$378/week if cost-anchored.)
+# Recalibrate whenever the dashboard % drifts from claude.ai's displayed %.
+MAX_20X_WEEKLY_TOKEN_LIMIT = 968_000_000
 
 # Anthropic resets the weekly quota at Mon 17:00 in the user's local TZ
 # (displayed on claude.ai/settings/usage). System runs in UTC; if the
