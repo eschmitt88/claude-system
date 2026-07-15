@@ -84,16 +84,18 @@ def _estimate_cost(counts: dict, models: list) -> Optional[float]:
 # 5h % can underestimate by ~2-3x in practice.
 MAX_20X_5H_TOKEN_LIMIT = 184_000_000
 
-# Weekly Max-20x ceiling in ccusage tokens. Reset-anchored calibration
-# history (user-reported claude.ai % vs summed window tokens):
-#   2026-05-22: 231.0M  = 10% → ~2.31B/week (Opus-era model mix)
-#   2026-07-15: 513.08M = 53% → ~968M/week  (Fable-5-dominant mix)
-# The implied ceiling moved ~2.4x between the two points, consistent with
-# Fable 5 costing 2x Opus per token — the underlying quota is almost
-# certainly cost-weighted, so this token-denominated constant is only
-# valid for the current model mix. (Cost cross-check at the 2026-07-15
-# point: $200.39 window cost = 53% → implied ~$378/week if cost-anchored.)
-# Recalibrate whenever the dashboard % drifts from claude.ai's displayed %.
+# Weekly Max-20x ceiling, cost-anchored. Reset-anchored calibration
+# history (user-reported claude.ai % vs summed window usage):
+#   2026-05-22: 231.0M tok           = 10% → ~2.31B tok/week (Opus-era mix)
+#   2026-07-15: 513.08M tok, $200.39 = 53% → ~968M tok/week, ~$378/week
+# The token-implied ceiling moved ~2.4x between the two points, consistent
+# with Fable 5 costing 2x Opus per token — Anthropic's quota is evidently
+# **cost-weighted**, so the USD ceiling is the model-mix-stable constant
+# and the primary basis for the weekly %. The token constant below is the
+# 2026-07-15 mix's equivalent, kept only as a fallback for windows where
+# ccusage can't price the blocks (all-unknown-model mix). Recalibrate both
+# whenever the dashboard % drifts from claude.ai's displayed %.
+MAX_20X_WEEKLY_COST_LIMIT_USD = 378.0
 MAX_20X_WEEKLY_TOKEN_LIMIT = 968_000_000
 
 # Anthropic resets the weekly quota at Mon 17:00 in the user's local TZ
@@ -261,6 +263,21 @@ def weekly_anchored() -> Optional[dict]:
     next_reset = cutoff + timedelta(days=7)
     now_local = datetime.now().astimezone()
     remaining_hours = max(0, int((next_reset - now_local).total_seconds() // 3600))
+
+    # Cost is the quota's real currency (see calibration note above). When
+    # the window has priced usage, the % is cost-based and the token limit
+    # reported to callers is the *effective* one for this window's mix
+    # (tokens × cost_limit / cost) — that keeps token-space consumers
+    # (agency pacing, suggested_session_tokens) consistent with the %.
+    # Unpriced windows fall back to the static token calibration.
+    if cost > 0 and total > 0:
+        pct = 100.0 * cost / MAX_20X_WEEKLY_COST_LIMIT_USD
+        effective_token_limit = int(total * MAX_20X_WEEKLY_COST_LIMIT_USD / cost)
+        limit_basis = "cost"
+    else:
+        pct = 100.0 * total / MAX_20X_WEEKLY_TOKEN_LIMIT
+        effective_token_limit = MAX_20X_WEEKLY_TOKEN_LIMIT
+        limit_basis = "tokens"
     return {
         "tokens": total,
         "input_tokens": input_t,
@@ -272,6 +289,8 @@ def weekly_anchored() -> Optional[dict]:
         "window_start": cutoff.isoformat(),
         "window_end": next_reset.isoformat(),
         "remaining_hours": remaining_hours,
-        "max20x_limit_tokens": MAX_20X_WEEKLY_TOKEN_LIMIT,
-        "pct_vs_max20x_limit": 100.0 * total / MAX_20X_WEEKLY_TOKEN_LIMIT,
+        "max20x_limit_tokens": effective_token_limit,
+        "max20x_limit_cost_usd": MAX_20X_WEEKLY_COST_LIMIT_USD,
+        "pct_vs_max20x_limit": pct,
+        "limit_basis": limit_basis,
     }
