@@ -15,6 +15,7 @@ callers can degrade to the state.db-only path.
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 from datetime import datetime, time, timedelta, timezone
@@ -105,6 +106,34 @@ MAX_20X_WEEKLY_TOKEN_LIMIT = 968_000_000
 _WEEKLY_RESET_HOUR_LOCAL = 17
 _WEEKLY_RESET_WEEKDAY = 0  # Monday
 
+# Anthropic occasionally issues out-of-band quota resets (goodwill /
+# incident credits) that zero the counter between scheduled boundaries
+# (first observed 2026-07-16). Record one by writing its ISO-8601
+# timestamp to this file:  date -Iseconds > ~/.claude/quota-reset-override
+# The window start uses it whenever it is more recent than the scheduled
+# anchor; it goes inert automatically once the next scheduled reset
+# passes, so the file never needs cleanup.
+_RESET_OVERRIDE_FILE = Path(
+    os.environ.get("QUOTA_RESET_OVERRIDE_FILE")
+    or Path.home() / ".claude" / "quota-reset-override"
+)
+
+
+def _reset_override() -> Optional[datetime]:
+    try:
+        raw = _RESET_OVERRIDE_FILE.read_text().strip()
+    except OSError:
+        return None
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.now().astimezone().tzinfo)
+    return dt
+
 
 def _run(args: list[str]) -> Optional[dict]:
     bin_path = _resolve_bin()
@@ -194,23 +223,34 @@ def active_block() -> Optional[dict]:
     }
 
 
-def _last_weekly_reset() -> datetime:
-    """Most recent Mon 17:00 local, as a tz-aware datetime."""
+def _weekly_window() -> tuple[datetime, datetime]:
+    """Current quota window as (last reset, next reset), tz-aware.
+
+    Start is the most recent scheduled Mon-17:00-local boundary, unless an
+    out-of-band reset override (see _RESET_OVERRIDE_FILE) is more recent.
+    End stays on the scheduled cadence — an out-of-band reset zeroes the
+    counter but does not move the reset day shown on claude.ai (if one
+    ever does, update the schedule constants, not the override)."""
     now_local = datetime.now().astimezone()
     days_back = (now_local.weekday() - _WEEKLY_RESET_WEEKDAY) % 7
-    candidate = datetime.combine(
+    scheduled = datetime.combine(
         (now_local - timedelta(days=days_back)).date(),
         time(_WEEKLY_RESET_HOUR_LOCAL, 0),
         tzinfo=now_local.tzinfo,
     )
-    if candidate > now_local:
-        candidate -= timedelta(days=7)
-    return candidate
+    if scheduled > now_local:
+        scheduled -= timedelta(days=7)
+    start = scheduled
+    override = _reset_override()
+    if override is not None and scheduled < override <= now_local:
+        start = override
+    return start, scheduled + timedelta(days=7)
 
 
 def weekly_anchored() -> Optional[dict]:
-    """Sum tokens since the last Mon 17:00 local — matches claude.ai's
-    weekly-quota window. Returns None on failure.
+    """Sum tokens since the last quota reset (scheduled Mon 17:00 local,
+    or an out-of-band override) — matches claude.ai's weekly-quota window.
+    Returns None on failure.
 
     We pull `ccusage blocks --json` and filter to blocks whose startTime
     falls on/after the cutoff. This is more accurate than `daily --since`
@@ -219,7 +259,7 @@ def weekly_anchored() -> Optional[dict]:
     raw = _run(["blocks"])
     if not raw:
         return None
-    cutoff = _last_weekly_reset()
+    cutoff, next_reset = _weekly_window()
     cutoff_utc = cutoff.astimezone(timezone.utc)
 
     total = 0
@@ -260,7 +300,6 @@ def weekly_anchored() -> Optional[dict]:
             except ValueError:
                 pass
 
-    next_reset = cutoff + timedelta(days=7)
     now_local = datetime.now().astimezone()
     remaining_hours = max(0, int((next_reset - now_local).total_seconds() // 3600))
 
