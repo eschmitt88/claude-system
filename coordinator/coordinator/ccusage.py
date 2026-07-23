@@ -89,6 +89,12 @@ MAX_20X_5H_TOKEN_LIMIT = 184_000_000
 # history (user-reported claude.ai % vs summed window usage):
 #   2026-05-22: 231.0M tok           = 10% → ~2.31B tok/week (Opus-era mix)
 #   2026-07-15: 513.08M tok, $200.39 = 53% → ~968M tok/week, ~$378/week
+#   2026-07-23: 703.44M tok, $363.19 = 35% → ~$1038/week implied. User
+#     reports a temporary +50% bonus this week; even so the bonus-free
+#     implied ceiling would be ~$692 — ~1.8x the 07-15 calibration.
+#     Handled for now via the weekly-limit override file (below) expiring
+#     at the 07-27 reset; RECALIBRATE against claude.ai early next window
+#     to see where the base constant really sits.
 # The token-implied ceiling moved ~2.4x between the two points, consistent
 # with Fable 5 costing 2x Opus per token — Anthropic's quota is evidently
 # **cost-weighted**, so the USD ceiling is the model-mix-stable constant
@@ -117,6 +123,40 @@ _RESET_OVERRIDE_FILE = Path(
     os.environ.get("QUOTA_RESET_OVERRIDE_FILE")
     or Path.home() / ".claude" / "quota-reset-override"
 )
+
+
+# Anthropic also occasionally grants temporary extra weekly quota (bonus
+# tokens — first observed week of 2026-07-20, when claude.ai showed 35%
+# at a spend our calibration scored as 96%). Record the corrected weekly
+# USD ceiling and when it stops applying:
+#   echo "1038 2026-07-27T17:00:00-07:00" > ~/.claude/quota-weekly-limit-override
+# (limit_usd, then ISO-8601 expiry — normally the next scheduled reset).
+# The override is ignored once the expiry passes, so it never needs
+# cleanup. Derive the value from a live claude.ai reading:
+#   limit_usd = window_cost_usd / (claude_ai_pct / 100).
+_WEEKLY_LIMIT_OVERRIDE_FILE = Path(
+    os.environ.get("QUOTA_WEEKLY_LIMIT_OVERRIDE_FILE")
+    or Path.home() / ".claude" / "quota-weekly-limit-override"
+)
+
+
+def _weekly_limit_override() -> Optional[float]:
+    try:
+        parts = _WEEKLY_LIMIT_OVERRIDE_FILE.read_text().split()
+    except OSError:
+        return None
+    if len(parts) != 2:
+        return None
+    try:
+        limit = float(parts[0])
+        expiry = datetime.fromisoformat(parts[1])
+    except ValueError:
+        return None
+    if expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=datetime.now().astimezone().tzinfo)
+    if limit <= 0 or datetime.now(timezone.utc) >= expiry:
+        return None
+    return limit
 
 
 def _reset_override() -> Optional[datetime]:
@@ -309,13 +349,17 @@ def weekly_anchored() -> Optional[dict]:
     # (tokens × cost_limit / cost) — that keeps token-space consumers
     # (agency pacing, suggested_session_tokens) consistent with the %.
     # Unpriced windows fall back to the static token calibration.
+    override = _weekly_limit_override()
+    cost_limit = override if override is not None else MAX_20X_WEEKLY_COST_LIMIT_USD
+    # Scale the token fallback by the same factor so both bases agree.
+    token_limit = int(MAX_20X_WEEKLY_TOKEN_LIMIT * cost_limit / MAX_20X_WEEKLY_COST_LIMIT_USD)
     if cost > 0 and total > 0:
-        pct = 100.0 * cost / MAX_20X_WEEKLY_COST_LIMIT_USD
-        effective_token_limit = int(total * MAX_20X_WEEKLY_COST_LIMIT_USD / cost)
+        pct = 100.0 * cost / cost_limit
+        effective_token_limit = int(total * cost_limit / cost)
         limit_basis = "cost"
     else:
-        pct = 100.0 * total / MAX_20X_WEEKLY_TOKEN_LIMIT
-        effective_token_limit = MAX_20X_WEEKLY_TOKEN_LIMIT
+        pct = 100.0 * total / token_limit
+        effective_token_limit = token_limit
         limit_basis = "tokens"
     return {
         "tokens": total,
@@ -329,7 +373,8 @@ def weekly_anchored() -> Optional[dict]:
         "window_end": next_reset.isoformat(),
         "remaining_hours": remaining_hours,
         "max20x_limit_tokens": effective_token_limit,
-        "max20x_limit_cost_usd": MAX_20X_WEEKLY_COST_LIMIT_USD,
+        "max20x_limit_cost_usd": cost_limit,
         "pct_vs_max20x_limit": pct,
         "limit_basis": limit_basis,
+        "limit_override_active": override is not None,
     }
