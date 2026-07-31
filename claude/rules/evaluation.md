@@ -27,7 +27,7 @@ data scraping, analysis one-shots — can ignore this rule entirely.
 When the rule applies, every skill that touches experiment state —
 `/propose` (including `--expand`), `/implement`, `/iterate` (including
 `--ensemble`), `/new-experiment`, and anything downstream — must obey
-the three clauses below. Their frontmatter lists this file under `respects:`
+the four clauses below. Their frontmatter lists this file under `respects:`
 as an explicit dependency declaration.
 
 ## 1. `test/` is off-limits during search
@@ -90,6 +90,25 @@ The natural scope of "comparable" depends on the project:
 Changing the split spec inside a task's scope is a **breaking
 change** that invalidates cross-experiment comparisons from before
 the change. Record such changes in `docs/decisions/NNNN-split-change.md`.
+
+## 4. The evaluator is part of the holdout
+
+Split hygiene does not protect the metric itself: an agent that edits
+the code computing or reporting the score can raise the number without
+ever touching `test/`. So:
+
+- At chain start, record the content hash of the evaluator (the script
+  or function that computes `metrics.json` / `final_metrics.json`) in
+  the experiment's `log.md`.
+- The final-scoring pass executes a **pristine copy** of the evaluator
+  — from the chain-start git commit (`git show <sha>:<path>`) or a
+  read-only location outside the search loop's writable tree — never
+  the workspace copy, and writes the hash it ran into
+  `final_metrics.json`.
+- A workspace evaluator that no longer matches the recorded hash is a
+  finding to surface, not something to silently re-hash. Deliberate
+  metric changes are breaking changes recorded like split changes
+  (clause 3).
 
 ## Why the rule is soft-specified
 
