@@ -43,13 +43,39 @@ if [ -n "$transcript" ] && [ -f "$transcript" ]; then
     }' "$transcript" 2>/dev/null || printf '%s' "$usage")"
 fi
 
+# Transcript aggregates are cumulative per session; every sink must store
+# the per-turn DELTA, or summing rows double-counts everything before the
+# last turn (measured ~51x; see agentic-research system-proposal
+# 2026-07-26-token-metering-cumulative-double-count). Each sink computes
+# the delta against its own recorded sum for this session, so each stays
+# internally consistent even if the other missed a write.
+# tools_used_summary stays cumulative — no consumer sums it, and the delta
+# of a histogram isn't worth the complexity.
+
 # 1. Legacy per-project NDJSON log — only when inside a project.
 #    Gitignored in projects (appended every turn, so it can never stay
 #    committed-clean); /iterate and /lint read it from the local tree.
 #    state.db below is the durable copy.
 if [ -n "$project_root" ]; then
-  printf '%s\n' "$(jq -n --arg t "$ts" --arg s "${session_id:-unknown}" --argjson u "$usage" \
-    '{timestamp:$t,session_id:$s} + $u')" >> "$project_root/_meta/token_log.ndjson"
+  ndjson="$project_root/_meta/token_log.ndjson"
+  prev='{"input_tokens":0,"output_tokens":0,"cache_read_tokens":0,"cache_creation_tokens":0}'
+  if [ -f "$ndjson" ]; then
+    prev="$(jq -s --arg s "${session_id:-unknown}" '
+      [.[] | select(.session_id==$s)] |
+      { input_tokens:          (map(.input_tokens // 0)          | add // 0),
+        output_tokens:         (map(.output_tokens // 0)         | add // 0),
+        cache_read_tokens:     (map(.cache_read_tokens // 0)     | add // 0),
+        cache_creation_tokens: (map(.cache_creation_tokens // 0) | add // 0) }' \
+      "$ndjson" 2>/dev/null || printf '%s' "$prev")"
+  fi
+  delta="$(jq -n --argjson u "$usage" --argjson p "$prev" '
+    def d(f): ([($u[f] // 0) - ($p[f] // 0), 0] | max);
+    { input_tokens: d("input_tokens"), output_tokens: d("output_tokens"),
+      cache_read_tokens: d("cache_read_tokens"),
+      cache_creation_tokens: d("cache_creation_tokens"),
+      tools_used_summary: ($u.tools_used_summary // {}) }')"
+  printf '%s\n' "$(jq -n --arg t "$ts" --arg s "${session_id:-unknown}" --argjson u "$delta" \
+    '{timestamp:$t,session_id:$s} + $u')" >> "$ndjson"
 fi
 
 # 2. Coordinator state.db — always. Project tag derived from root basename.
@@ -63,18 +89,40 @@ if [ -x "$COORD_PY" ]; then
   # won, so `sys.stdin.read()` saw "" and every field defaulted to 0.
   "$COORD_PY" - "${session_id:-unknown}" "$project_slug" "$ts" "$usage" <<'PYEOF' || true
 import json, sys
+from coordinator.db import connect
 from coordinator.writers import insert_token_event
+
+FIELDS = ("input_tokens", "output_tokens", "cache_read_tokens", "cache_creation_tokens")
 payload = json.loads(sys.argv[4] or "{}")
-insert_token_event(
-    session_id=sys.argv[1] or "unknown",
-    project=sys.argv[2] or None,
-    input_tokens=payload.get("input_tokens", 0),
-    output_tokens=payload.get("output_tokens", 0),
-    cache_read_tokens=payload.get("cache_read_tokens", 0),
-    cache_creation_tokens=payload.get("cache_creation_tokens", 0),
-    tools_used=payload.get("tools_used_summary", {}),
-    timestamp=sys.argv[3],
-)
+sid = sys.argv[1] or "unknown"
+
+# Store the per-turn delta vs. what token_events already holds for this
+# session. Self-referential, so no schema change: sum(rows) == last
+# cumulative once all rows are deltas.
+with connect() as c:
+    row = c.execute(
+        "SELECT COALESCE(SUM(input_tokens),0), COALESCE(SUM(output_tokens),0),"
+        "       COALESCE(SUM(cache_read_tokens),0), COALESCE(SUM(cache_creation_tokens),0)"
+        "  FROM token_events WHERE session_id = ?", (sid,)).fetchone()
+prev = dict(zip(FIELDS, (int(v or 0) for v in row)))
+delta = {}
+clamped = []
+for f in FIELDS:
+    d = int(payload.get(f, 0)) - prev[f]
+    if d < 0:
+        clamped.append(f)
+        d = 0
+    delta[f] = d
+if clamped:
+    # Cumulative transcript total fell below the recorded sum — transcript
+    # rotation/truncation, or a resumed session under an old id. Recorded
+    # as 0 (under-count, the safe direction); warn so it's diagnosable.
+    print(f"WARN token_logger: delta clamped to 0 for {clamped} in session {sid}",
+          file=sys.stderr)
+
+insert_token_event(session_id=sid, project=sys.argv[2] or None, **delta,
+                   tools_used=payload.get("tools_used_summary", {}),
+                   timestamp=sys.argv[3])
 PYEOF
 fi
 
