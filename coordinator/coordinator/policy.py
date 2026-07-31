@@ -23,7 +23,11 @@ import yaml
 from .readers import latest_hardware_sample, running_job_for_project, tokens_in_last
 
 DEFAULTS = {
-    "max_tokens_weekly": 50_000_000,  # coarse safety net; override per-project
+    # Coarse safety net; override per-project via budget.yaml `max_tokens_weekly`.
+    # Sized against measured true spend on this box (~100M/7d incl. cache
+    # creation, post 2026-07-31 meter fix) so the <25%-remaining deferral
+    # trips only on genuinely heavy weeks, not steady-state.
+    "max_tokens_weekly": 150_000_000,
     "vram_margin_gb": 2.0,
 }
 
@@ -48,7 +52,10 @@ def _load_budget(project_root: Optional[Path]) -> dict:
     except yaml.YAMLError:
         return DEFAULTS
     return {
-        "max_tokens_weekly": int(data.get("max_tokens", DEFAULTS["max_tokens_weekly"])),
+        # budget.yaml's `max_tokens` is a PER-CHAIN ceiling consumed by
+        # /iterate — don't overload it as the weekly gate. A project that
+        # wants a project-specific weekly ceiling sets `max_tokens_weekly`.
+        "max_tokens_weekly": int(data.get("max_tokens_weekly", DEFAULTS["max_tokens_weekly"])),
         "vram_margin_gb": float(data.get("vram_margin_gb", DEFAULTS["vram_margin_gb"])),
     }
 
