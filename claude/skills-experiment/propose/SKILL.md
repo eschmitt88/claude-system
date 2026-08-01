@@ -83,9 +83,11 @@ output is a decision document.
    expected metric movement would update your beliefs. Keep it tight —
    aim for 200–400 words.
 
-5. **Show the diff** for the single new file and wait for confirmation
-   before writing. Do not create any other files. Do not touch
-   `dvc.yaml`, `config.yaml`, or any experiment folder.
+5. **Persist per the Confirmation principle** (`agency.md`): a proposal
+   is hypothesis selection — show the diff and confirm under
+   `agency: standard`; write and continue under `agency: max`. Do not
+   create any other files. Do not touch `dvc.yaml`, `config.yaml`, or
+   any experiment folder.
 
 6. **After writing**, append one line to `_meta/log.md`:
    `YYYY-MM-DD HH:MM propose <slug>`.
@@ -117,7 +119,7 @@ Deltas from the default mode:
   evidence. **Do not modify the parent** — it stays individually
   implementable.
 - Each child is an ordinary proposal (same frontmatter keys, body
-  rules, and step-5 confirmation as above; fresh `date:`,
+  rules, and step-5 persistence as above; fresh `date:`,
   `status: proposed`) plus two extra fields:
   `parent: "<parent-slug>"` and
   `expansion_axis: "<one-line label for what varies>"`.

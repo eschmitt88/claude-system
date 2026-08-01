@@ -77,9 +77,10 @@ action. The meta project doesn't back-reference itself.
    doesn't exist, emit a one-line warning ("WARNING: @import target
    <path> not found") and skip the append. Do not fabricate the file.
 
-7. **Show the diff** for every concept file modified and wait for
-   confirmation before writing. When called by `/ingest` or
-   `/new-project`, the parent skill batches these into its own diff.
+7. **Write the back-references** — an artifact write (bookkeeping, not
+   hypothesis selection), so no confirmation gate; show the diff of
+   what changed. When called by `/ingest` or `/new-project`, the parent
+   skill batches these into its own diff.
 
 ## Notes
 

@@ -140,7 +140,8 @@ that is allowed to spawn a subagent.
    - Append to `_meta/log.md`:
      `YYYY-MM-DD HH:MM implement <slug> → experiments/YYYY-MM-DD-<slug>/ seeds=<N> model=<slug>`.
    - Relay the subagent's ≤200-word summary to the user verbatim.
-   - Show the diff for the moved/updated proposal before writing.
+   - The proposal move/update is an artifact write (filing a completed
+     run) — no confirmation gate; show the diff of what changed.
 
 7. **On subagent return (hard failure)** — the subagent exited with
    an error, the run crashed, or `metrics.json` is missing:
@@ -153,7 +154,8 @@ that is allowed to spawn a subagent.
      `model: <resolved implementer model slug>`.
    - Append to `_meta/log.md`:
      `YYYY-MM-DD HH:MM implement-failed <slug>: <error>`.
-   - Show the diff before writing.
+   - Artifact write (filing a failed run) — no confirmation gate; show
+     the diff of what changed.
 
 ## Constraints
 

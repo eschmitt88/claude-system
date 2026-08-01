@@ -74,6 +74,25 @@ every few units of work), not just once — quota and GPU state move.
   candidate file with no disposition is unfinished work; `max` repos close
   it rather than leaving an "uncurated" pile.
 
+## Confirmation principle
+
+One rule decides which skills pause for a human and which don't:
+
+> **Artifact writes** — ingesting sources, literature/concept notes,
+> scaffolds, logs, wrap entries — commit autonomously everywhere, in
+> every repo. **Hypothesis selection** — proposals, expansion children,
+> ensemble choices, MoC promotion, derived experiments — confirms under
+> `agency: standard` and auto-advances under `agency: max` (verdict
+> permitting).
+
+Skills reference this principle instead of hard-coding their own gate.
+Rationale: recording what happened needs no approval (git makes it
+reversible); choosing what to spend compute on is the decision worth a
+human look — and only in repos that haven't opted into autonomy.
+Over-gating has a measured cost (wu2026hasbench: +50% interaction turns
+for diminishing or negative returns), so the default is the gate off
+except at genuine decision points.
+
 ## Persist the work — push at the end of every autonomous burst
 
 The per-repo Pages site reads the **live** GitHub tree, so autonomous work
