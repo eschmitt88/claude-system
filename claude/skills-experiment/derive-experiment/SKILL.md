@@ -2,8 +2,8 @@
 name: derive-experiment
 description: Turn one literature note into an experiment proposal. Reads the note + frontmatter, extracts the core claim or technique, and proposes an experiment that replicates, tests, or extends that claim in the context of the active project (using the NOTES.md tail and project README.md for framing). Output format matches /propose exactly. Appends the new proposal's slug to the literature note's related_experiments: frontmatter field. Persists per agency.md's Confirmation principle (confirm under standard, auto-advance under max).
 respects:
-  - ~/.claude/rules/evaluation.md
-  - ~/.claude/rules/agency.md
+  - ~/claude-system/claude/rules/evaluation.md
+  - ~/claude-system/claude/rules/agency.md
 ---
 
 # derive-experiment

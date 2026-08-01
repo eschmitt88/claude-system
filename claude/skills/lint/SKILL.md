@@ -2,7 +2,7 @@
 name: lint
 description: Knowledge-graph health check. Runs scripts/kg_lint.py (deterministic checks — orphans, dead wikilinks, sourceless concepts, staleness, missing diagnostics, unanchored claims, HCE test/ access), then interprets and prioritizes the findings. Auto-detects research vs experiments mode. Report-only — does not auto-fix. Hard failure on HCE violations.
 respects:
-  - ~/.claude/rules/evaluation.md
+  - ~/claude-system/claude/rules/evaluation.md
 ---
 
 # lint
@@ -44,7 +44,7 @@ The script reports; you judge:
 
 `HCE VIOLATION (HARD)` findings block further `/iterate` cycles until
 resolved — never downgrade them to warnings
-(`~/.claude/rules/evaluation.md`).
+(`~/claude-system/claude/rules/evaluation.md`).
 
 ## Notes
 

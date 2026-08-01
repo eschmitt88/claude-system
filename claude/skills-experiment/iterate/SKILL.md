@@ -2,8 +2,8 @@
 name: iterate
 description: One propose→implement loop cycle per invocation. Reads the latest implemented experiment's Diagnostics section, picks the strongest next_candidate, runs the /propose logic seeded with that candidate, presents the proposal, and pauses for user approval. On approval calls /implement. --experiment <path> targets a specific experiment; --chain <N> repeats up to N times without pausing; --chain-until <cond> halts on a budget / metric / count threshold; --ensemble <slug...> [--strategy auto|voting|stacking|averaging] runs a single combination cycle over completed experiments sharing a metric (kind: ensemble, members: frontmatter). Reads budget.yaml as implicit halting conditions each cycle. Appends every cycle to _meta/iteration_log.md.
 respects:
-  - ~/.claude/rules/evaluation.md
-  - ~/.claude/rules/agency.md
+  - ~/claude-system/claude/rules/evaluation.md
+  - ~/claude-system/claude/rules/agency.md
 ---
 
 # iterate
@@ -41,7 +41,7 @@ halts. A subagent hard failure always halts regardless of flags.
 
 Between cycles, read **only** each completed experiment's
 `metrics.json` — never `final_metrics.json` or `test/`
-(`~/.claude/rules/evaluation.md`).
+(`~/claude-system/claude/rules/evaluation.md`).
 
 ## Steps (single cycle; default)
 

@@ -2,8 +2,8 @@
 name: propose
 description: Strategic ideation for the active research project — no implementation. Reads concepts/, the 10 most recently modified literature notes, and the 5 most recent experiment READMEs + their metrics.json. Emits one proposal file at experiments/_proposals/YYYY-MM-DD-<slug>.md with flat YAML frontmatter (hypothesis, rationale, reads, expected_metric, design_sketch, risks, related_prior, estimated_runtime, status) plus a prose argument. --expand <proposal-path> [--n N] switches to breadth-first mode, emitting up to N (default 3) sibling proposals of an existing one under experiments/_proposals/_expansions/<parent-slug>/ with parent: and expansion_axis: frontmatter. Does not scaffold an experiment, write code, or touch dvc.yaml.
 respects:
-  - ~/.claude/rules/evaluation.md
-  - ~/.claude/rules/agency.md
+  - ~/claude-system/claude/rules/evaluation.md
+  - ~/claude-system/claude/rules/agency.md
 ---
 
 # propose
@@ -29,7 +29,7 @@ output is a decision document.
    - the **10 most recently modified** `literature/**/*.md`
    - the **5 most recent** `experiments/*/README.md` and each sibling
      `metrics.json` (never `final_metrics.json` or `test/` —
-     `~/.claude/rules/evaluation.md`)
+     `~/claude-system/claude/rules/evaluation.md`)
    - the last 50 lines of `NOTES.md`
    - `budget.yaml` at the project root (if present) — so
      `estimated_runtime:` and `risks:` can be grounded against the

@@ -30,7 +30,7 @@ Fill in after the run. Point at `metrics.json` (validation split — this
 is the search signal and the file every other skill reads). A separate
 `final_metrics.json` holds held-out test-split numbers and is written
 only by the `dvc repro final_eval` pass at chain end. See
-`~/.claude/rules/evaluation.md`.
+`~/claude-system/claude/rules/evaluation.md`.
 
 ## Interpretation
 

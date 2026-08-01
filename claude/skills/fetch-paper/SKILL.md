@@ -2,8 +2,8 @@
 name: fetch-paper
 description: /fetch-paper <arxiv-id-or-url>. Downloads the full text into raw/papers/<citekey>.pdf (or .md for HTML; GitHub repos land in raw/repos/<repo-slug>.md), derives a Better-BibTeX-style citekey from authors + year, and chains into /ingest to produce the literature note. Handles arxiv abs/pdf URLs, direct PDFs, and GitHub repo READMEs. Does not re-download if the target already exists.
 respects:
-  - ~/.claude/rules/evaluation.md
-  - ~/.claude/rules/agency.md
+  - ~/claude-system/claude/rules/evaluation.md
+  - ~/claude-system/claude/rules/agency.md
 ---
 
 # fetch-paper

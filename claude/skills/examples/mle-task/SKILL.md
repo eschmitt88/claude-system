@@ -2,7 +2,7 @@
 name: mle-task
 description: Scaffold an MLE-bench task into the active project. Resolves the task's prepared data from the local MLE-bench cache, creates a dated experiment folder with train/ and test/ symlinks, writes splits.yaml (stratified / temporal / random strategy matched to the task), drafts a seed proposal under experiments/_proposals/, and writes an experiment-level CLAUDE.md with task-specific context. Does not run /implement or /iterate — hands off to the user.
 respects:
-  - ~/.claude/rules/evaluation.md
+  - ~/claude-system/claude/rules/evaluation.md
 ---
 
 # mle-task
@@ -24,7 +24,7 @@ and `/iterate` can drive it through the normal research loop.
 experiment CLAUDE.md. It **never reads from** `prepared/private/`
 (the grader's labels) and **never reads from** or previews
 `<experiment>/test/`. Only `/mle-score` touches `test/`. See
-`~/.claude/rules/evaluation.md`.
+`~/claude-system/claude/rules/evaluation.md`.
 
 ## Steps
 

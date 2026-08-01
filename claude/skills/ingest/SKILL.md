@@ -2,7 +2,7 @@
 name: ingest
 description: Ingest a file in raw/ into the knowledge graph. Proposes a literature/<kind>/<filename>.md from the matching _meta/templates/ template, identifies candidate concepts (updates existing or seeds new), updates index + log, shows diff.
 respects:
-  - ~/.claude/rules/agency.md
+  - ~/claude-system/claude/rules/agency.md
 ---
 
 # ingest

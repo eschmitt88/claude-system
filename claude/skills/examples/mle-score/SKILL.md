@@ -2,13 +2,13 @@
 name: mle-score
 description: Run final-scoring pass on an MLE-bench experiment. Inferences the trained model on the held-out test/ directory (the only skill allowed to read test/), produces submission.csv in MLE-bench format, invokes `mlebench grade-sample`, and writes final_metrics.json with grader output + provenance (task ID, grader version, timestamp, MLE-bench git SHA). Does not mutate metrics.json. Appends one FINAL_SCORE line to _meta/iteration_log.md for /lint to grep.
 respects:
-  - ~/.claude/rules/evaluation.md
+  - ~/claude-system/claude/rules/evaluation.md
 ---
 
 # mle-score
 
 The **final-scoring pass** for an MLE-bench experiment. Read the HCE
-rule (`~/.claude/rules/evaluation.md`) before touching this skill.
+rule (`~/claude-system/claude/rules/evaluation.md`) before touching this skill.
 
 ## Arguments
 

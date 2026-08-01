@@ -2,8 +2,8 @@
 name: curate
 description: Resolve uncurated candidate files in raw/_candidates/. For each item, decide ingest vs decline; ingest the keepers (fetch-paper + ingest), record a one-line reason for declines, append a ## Curation summary, then move the file to raw/_candidates/_done/ so it stops counting as uncurated. In standard repos it proposes the dispositions and waits; in `agency: max` repos it acts autonomously while the headroom verdict permits. Closes the loop /discover and /digest open.
 respects:
-  - ~/.claude/rules/evaluation.md
-  - ~/.claude/rules/agency.md
+  - ~/claude-system/claude/rules/evaluation.md
+  - ~/claude-system/claude/rules/agency.md
 ---
 
 # curate
@@ -52,7 +52,7 @@ For each uncurated candidate file:
 5. **Log**: append to `_meta/log.md`:
    `YYYY-MM-DD HH:MM curate <file> ingested=<k> declined=<j> dup=<d>`.
 
-6. **Persist** per `~/.claude/rules/agency.md`: commit and (in `max` repos)
+6. **Persist** per `~/claude-system/claude/rules/agency.md`: commit and (in `max` repos)
    push after each file, so the uncurated count visibly drops on the Pages
    site. Re-check the headroom verdict between files; stop on `hold`.
 

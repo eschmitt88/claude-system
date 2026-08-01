@@ -209,15 +209,22 @@ class Lint:
             })
         r["moc_cluster_stats"] = clusters
 
-        # stale candidates
+        # stale candidates — a curation OBLIGATION only in repos whose
+        # backlog lifecycle is managed (agency: max, cron-drained). In
+        # standard repos /discover output is a triage note, not a debt,
+        # so report the count as info instead of nagging forever.
+        managed = self.budget.get("agency") == "max"
+        r["candidates_lifecycle"] = "managed" if managed else "unmanaged"
         cand_dir = self.root / "raw" / "_candidates"
-        stale = []
+        stale, n_cand = [], 0
         if cand_dir.is_dir():
             for p in sorted(cand_dir.iterdir()):
                 if p.is_file():
+                    n_cand += 1
                     a = age_days(file_date(p, {},))
-                    if a is not None and a > STALE_CANDIDATE_DAYS:
+                    if managed and a is not None and a > STALE_CANDIDATE_DAYS:
                         stale.append({"path": rel(self.root, p), "age_days": a})
+        r["candidates_count"] = n_cand
         r["stale_candidates"] = stale
 
         r["high_relevance_stale"] = [
@@ -414,8 +421,14 @@ def render_text(r: dict) -> str:
     section("MoC CLUSTER STATS", r["moc_cluster_stats"],
             lambda x: f"  tag={x['tag']} n={x['n']} moc_exists={x['moc_exists']} "
                       f"in_mocs={x['n_in_existing_mocs']}")
-    section("STALE CANDIDATES", r["stale_candidates"],
-            lambda x: f"  {x['path']}  age={x['age_days']}d")
+    if r.get("candidates_lifecycle") == "managed":
+        section("STALE CANDIDATES", r["stale_candidates"],
+                lambda x: f"  {x['path']}  age={x['age_days']}d")
+    elif r.get("candidates_count"):
+        out.append(f"CANDIDATES (info): {r['candidates_count']} triage "
+                   "file(s) in raw/_candidates/ — no obligation in a "
+                   "standard repo; run /curate if and when useful")
+        out.append("")
     section("HIGH-RELEVANCE LITERATURE STALE >30d", r["high_relevance_stale"],
             lambda x: f"  {x['path']}  relevance={x['relevance']} age={x['age_days']}d")
     if r["mode"] == "experiments":

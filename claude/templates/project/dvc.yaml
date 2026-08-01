@@ -1,7 +1,7 @@
 # DVC pipeline. Add stages as the project develops.
 #
 # Two evaluation stages are reserved by the HCE rule
-# (~/.claude/rules/evaluation.md):
+# (~/claude-system/claude/rules/evaluation.md):
 #
 #   eval        — validation-split metrics. Search signal. Part of the
 #                 default `dvc repro`. May read train/ and val/ only.
