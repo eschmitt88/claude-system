@@ -1,6 +1,6 @@
 ---
 name: headroom
-description: Print a formatted summary of Claude token usage (5h block / reset-anchored weekly), hardware state (CPU/RAM/GPU/disk), and the coordinator job queue. Sub-second. Cheap to run often. Reads from ~/.claude/state.db — no writes. Renamed from /status to avoid collision with the built-in /status slash command.
+description: Print a formatted summary of Claude token usage (5h block / reset-anchored weekly), hardware state (CPU/RAM/GPU/disk), and the agency verdict. Sub-second. Cheap to run often. Reads from ~/.claude/state.db — no writes. Renamed from /status to avoid collision with the built-in /status slash command.
 ---
 
 # headroom
@@ -14,7 +14,6 @@ headroom do I have right now?"
 - Before `/implement`, `/iterate`, `/ingest`, `/digest`, or any loop —
   check token-window usage and GPU availability.
 - When a subagent has been churning and you want to see where you sit.
-- As part of `/plan`'s output.
 
 ## How
 
@@ -43,10 +42,8 @@ skills):
 - **Hardware (latest sample)** — CPU / RAM / disk on `/mnt/projects` /
   GPU utilization + VRAM + temperature + power. Sampled every 30s by
   the `claude-hw-poller.timer` systemd unit.
-- **Jobs** — running and queued jobs declared by earlier skill
-  invocations.
-- **Recent completed (last 5)** — with estimated-vs-actual token
-  delta so you can tell whether your estimates are calibrated.
+- **Agency verdict** — GO/SLOW/HOLD with reasons and a suggested
+  session token budget (drives `agency: max` repos).
 
 ## ccusage dependency
 

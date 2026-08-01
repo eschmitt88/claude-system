@@ -1,4 +1,4 @@
-"""Read helpers for /headroom, /plan, and the dashboard."""
+"""Read helpers for /headroom and the dashboard."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
@@ -46,24 +46,6 @@ def latest_hardware_sample() -> Optional[dict]:
         return dict(row) if row else None
 
 
-def queued_jobs(limit: int = 20) -> list[dict]:
-    with connect() as c:
-        rows = c.execute(
-            "SELECT * FROM jobs WHERE status IN ('queued','running') ORDER BY priority DESC, id ASC LIMIT ?",
-            (limit,),
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-
-def recent_completed_jobs(limit: int = 20) -> list[dict]:
-    with connect() as c:
-        rows = c.execute(
-            "SELECT * FROM jobs WHERE status IN ('done','deferred','failed') ORDER BY id DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-        return [dict(r) for r in rows]
-
-
 def tokens_per_day(days: int = 7) -> list[int]:
     """One bucket per UTC day, oldest → newest. Used for the home sparkline."""
     out: list[int] = []
@@ -83,16 +65,3 @@ def tokens_per_day(days: int = 7) -> list[int]:
             ).fetchone()
             out.append(int(row["t"]))
     return out
-
-
-def running_job_for_project(project: str, kind: Optional[str] = None) -> Optional[dict]:
-    where = "status='running' AND project=?"
-    args: list = [project]
-    if kind:
-        where += " AND kind=?"
-        args.append(kind)
-    with connect() as c:
-        row = c.execute(
-            f"SELECT * FROM jobs WHERE {where} ORDER BY id DESC LIMIT 1", args
-        ).fetchone()
-        return dict(row) if row else None

@@ -3,11 +3,9 @@
 A single sqlite database at ~/.claude/state.db is the source of truth for:
 - Claude quota state (5h + weekly windows)
 - Hardware samples (CPU/RAM/disk/GPU)
-- Job queue (declared work + estimated cost + status)
-- Decisions log (admit/defer)
 
-Skills consult the coordinator via /headroom and /plan; long-running
-skills declare jobs before spending tokens.
+Skills consult the coordinator via /headroom; the agency verdict turns
+quota + hardware state into a GO/SLOW/HOLD recommendation.
 """
 from __future__ import annotations
 
