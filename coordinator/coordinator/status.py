@@ -3,8 +3,7 @@
 Prints:
 - Claude token usage over the trailing 5h and 7d windows (state.db totals).
 - Latest hardware sample with per-resource units.
-- Running + queued jobs (top 10 each) with ETA if available.
-- Last 5 completed jobs with est-vs-actual token delta.
+- The agency (autonomous-spend) verdict.
 
 Pure read path — no writes, no policy. Should return in <1s.
 """
@@ -16,12 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from . import agency, ccusage, config
-from .readers import (
-    latest_hardware_sample,
-    queued_jobs,
-    recent_completed_jobs,
-    tokens_in_last,
-)
+from .readers import latest_hardware_sample, tokens_in_last
 
 
 def _fmt_tokens(n: int) -> str:
@@ -52,8 +46,6 @@ def render(as_json: bool = False) -> str:
         five_h = tokens_in_last(5 * 3600)
         seven_d = tokens_in_last(7 * 24 * 3600)
         hw = latest_hardware_sample()
-        queued = queued_jobs(limit=10)
-        completed = recent_completed_jobs(limit=5)
         cc_block = f_block.result()
         cc_7d = f_7d.result()
 
@@ -69,8 +61,6 @@ def render(as_json: bool = False) -> str:
                 "ccusage_weekly": cc_7d,
                 "agency": agency_verdict,
                 "hardware": hw,
-                "running_and_queued": queued,
-                "recent_completed": completed,
                 "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             },
             indent=2,
@@ -166,43 +156,6 @@ def render(as_json: bool = False) -> str:
     if agency_verdict.get("suggested_session_tokens"):
         out.append(f"    suggested spend this session: ~{_fmt_tokens(agency_verdict['suggested_session_tokens'])} tokens")
     out.append("  (drives `agency: max` repos; standard repos still propose-and-confirm)")
-
-    out.append("")
-    out.append("=== Jobs ===")
-    running = [j for j in queued if j["status"] == "running"]
-    pending = [j for j in queued if j["status"] == "queued"]
-    if running:
-        out.append("  running:")
-        for j in running:
-            est = _fmt_tokens(j.get("est_tokens") or 0)
-            out.append(
-                f"    #{j['id']} [{j['kind']}] {j['project']}  est={est} tokens  "
-                f"started {j.get('started_at','?')}"
-            )
-    else:
-        out.append("  running: (none)")
-    if pending:
-        out.append("  queued:")
-        for j in pending:
-            est = _fmt_tokens(j.get("est_tokens") or 0)
-            out.append(f"    #{j['id']} [{j['kind']}] {j['project']}  est={est}  created {j['created_at']}")
-    else:
-        out.append("  queued: (none)")
-
-    out.append("")
-    out.append("=== Recent completed (last 5) ===")
-    if completed:
-        for j in completed:
-            est = j.get("est_tokens") or 0
-            act = j.get("actual_tokens") or 0
-            delta = act - est
-            sign = "+" if delta >= 0 else ""
-            out.append(
-                f"  #{j['id']} [{j['kind']}] {j['project']}  {j['status']}  "
-                f"est={_fmt_tokens(est)} actual={_fmt_tokens(act)} ({sign}{_fmt_tokens(delta)})"
-            )
-    else:
-        out.append("  (none)")
 
     return "\n".join(out)
 

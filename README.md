@@ -18,7 +18,7 @@ framework-level tour of every part and how they connect (source:
 | `claude/skills-experiment/` | The experiment-loop group (`/propose`, `/implement`, `/iterate`, `/new-experiment`, `/derive-experiment`) — **not** global; linked per-project via `<project>/.claude/skills` (see "Growing a lit repo" below). |
 | `claude/hooks/` | Lifecycle hooks (`SessionStart`, `Stop` = token logger, `PreToolUse` = safety net). |
 | `claude/templates/` | Project and note templates copied by `/new-project` / `/ingest`. |
-| `coordinator/` | Python package. `state.db` schema + writers, hardware poller, policy (`can_start`). |
+| `coordinator/` | Python package. `state.db` schema + writers, hardware poller, agency verdict. |
 | `dashboard/` | FastAPI + HTMX + SSE dashboard. Reads `state.db` + project files. LAN-only. |
 | `scripts/` | Maintenance + bootstrap helpers. |
 | `install.sh` | Idempotent bootstrap for a fresh machine. |
@@ -143,13 +143,13 @@ A single sqlite database at `~/.claude/state.db` tracks:
 
 - **Claude quota** — tokens consumed in the current 5h and weekly windows.
 - **Hardware** — GPU/CPU/RAM/disk samples (30s cadence).
-- **Job queue** — declared jobs + estimated resource cost + status.
-- **Decisions** — admit/defer log for policy review.
 
-Skills consult the coordinator via `/headroom` and `/plan`. Long-running
-skills (`/implement`, `/iterate`, `/ingest`, `/digest`) declare their
-job to the queue and honor policy verdicts. A PreToolUse hook is the
-safety net, not the primary control.
+Skills consult the coordinator via `/headroom`. (An admission layer —
+job queue, admit/defer policy, per-session PreToolUse cap — was removed
+2026-08-01 after three months of telemetry showed it never fired; see
+agentic-research `docs/system-proposals/2026-07-31-instruction-ablation-program.md`.
+Recoverable from git history if parallel multi-project autonomy ever
+needs arbitration.)
 
 **Agency verdict.** `claude-coordinator-agency` (shown in `/headroom`)
 turns the quota + hardware state into a `GO / SLOW / HOLD` recommendation,

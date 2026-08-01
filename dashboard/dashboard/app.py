@@ -25,12 +25,7 @@ from fastapi.templating import Jinja2Templates
 from sse_starlette.sse import EventSourceResponse
 
 from coordinator import ccusage
-from coordinator.readers import (
-    latest_hardware_sample,
-    queued_jobs,
-    recent_completed_jobs,
-    tokens_in_last,
-)
+from coordinator.readers import latest_hardware_sample, tokens_in_last
 
 from .projects import (
     all_project_status,
@@ -267,17 +262,6 @@ def project_dashboard_file(name: str, filepath: str):
     if not target.exists() or not target.is_file():
         return HTMLResponse(f"not found: {filepath}", status_code=404)
     return FileResponse(str(target))
-
-
-@app.get("/queue", response_class=HTMLResponse)
-def queue(request: Request):
-    running_and_queued = queued_jobs(limit=50)
-    completed = recent_completed_jobs(limit=25)
-    return TEMPLATES.TemplateResponse(
-        request,
-        "queue.html",
-        _ctx({"active": "queue", "jobs": running_and_queued, "completed": completed}),
-    )
 
 
 @app.get("/project/{name}", response_class=HTMLResponse)

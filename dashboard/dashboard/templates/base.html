@@ -17,7 +17,6 @@
         <a href="/" class="{% if active == 'home' %}active{% endif %}">Now</a>
         <a href="/projects-hub" class="{% if active == 'projects' %}active{% endif %}">Projects</a>
         <a href="/ports" class="{% if active == 'ports' %}active{% endif %}">Ports</a>
-        <a href="/queue" class="{% if active == 'queue' %}active{% endif %}">Queue</a>
       </nav>
       <span class="spacer"></span>
       <span class="live-strip" id="live-strip">
@@ -112,7 +111,6 @@
       if (e.key === 'g') { pending = 'g'; setTimeout(() => pending=null, 1000); return; }
       if (pending === 'g') {
         if (e.key === 'h') location.href = '/';
-        else if (e.key === 'q') location.href = '/queue';
         pending = null;
       }
     });

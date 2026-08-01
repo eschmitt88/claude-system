@@ -42,41 +42,6 @@ CREATE TABLE IF NOT EXISTS hardware_samples (
 );
 CREATE INDEX IF NOT EXISTS idx_hw_time ON hardware_samples(timestamp);
 
-CREATE TABLE IF NOT EXISTS jobs (
-    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
-    project            TEXT NOT NULL,
-    kind               TEXT NOT NULL,          -- 'research', 'implement', 'iterate', 'ingest', 'score', 'digest'
-    description        TEXT,
-    est_tokens         INTEGER,
-    est_gpu_minutes    REAL,
-    est_vram_gb        REAL,
-    priority           INTEGER DEFAULT 0,
-    status             TEXT NOT NULL,          -- 'queued', 'running', 'done', 'deferred', 'failed'
-    created_at         TEXT NOT NULL,
-    started_at         TEXT,
-    completed_at       TEXT,
-    actual_tokens      INTEGER,
-    actual_gpu_minutes REAL,
-    note               TEXT
-);
-CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
-CREATE INDEX IF NOT EXISTS idx_jobs_project ON jobs(project);
-
-CREATE TABLE IF NOT EXISTS decisions (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp  TEXT NOT NULL,
-    job_id     INTEGER,                        -- FK-ish, not enforced
-    verdict    TEXT NOT NULL,                  -- 'admit' | 'defer'
-    reason     TEXT,
-    FOREIGN KEY (job_id) REFERENCES jobs(id)
-);
-
-CREATE TABLE IF NOT EXISTS session_caps (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id    TEXT NOT NULL UNIQUE,
-    hard_stop_tokens INTEGER,                  -- PreToolUse hook halts past this
-    created_at    TEXT NOT NULL
-);
 """
 
 

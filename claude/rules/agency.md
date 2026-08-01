@@ -95,5 +95,3 @@ Autonomy is bounded, not unbounded:
   `evaluation.md`. `max` agency never licenses touching the holdout.
 - **`hold` is absolute** — a `hold` verdict (weekly quota ≥90% spent, disk
   critically low) stops new autonomous work even mid-burst.
-- **Destructive/expensive jobs still declare to the coordinator** via
-  `/plan` so the queue and PreToolUse cap can see them.
