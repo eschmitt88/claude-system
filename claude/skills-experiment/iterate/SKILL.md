@@ -26,25 +26,13 @@ in a chain under explicit halting conditions.
   `auto | voting | stacking | averaging`, default `auto`. Not
   combinable with `--chain`.
 
-### Chain-until grammar
+### Chain-until conditions
 
-```
-<key>   ∈ { metric, wall_hours, tokens_spent, consecutive_no_improvement, experiments_completed }
-<op>    ∈ { gte, lte, eq }
-<value> is numeric (ints or floats); or for key=metric, numeric with
-        the metric name inferred from the most recent proposal's
-        expected_metric.name.
-```
-
-Examples:
-
-```
---chain-until wall_hours:gte:8
---chain-until tokens_spent:gte:2000000
---chain-until consecutive_no_improvement:gte:3
---chain-until experiments_completed:gte:5
---chain-until metric:gte:0.92
-```
+Condition strings (`<key>:<op>:<value>`, e.g. `wall_hours:gte:8`,
+`metric:gte:0.92`) are evaluated by `scripts/chain_budget.py` — the
+grammar, the budget.yaml implicit-ceiling mapping, and the token/wall
+arithmetic live there. For `key=metric` the metric name is inferred
+from the most recent proposal's `expected_metric.name`.
 
 `--chain N` and `--chain-until` can coexist; either halting condition
 halts. A subagent hard failure always halts regardless of flags.
@@ -104,29 +92,26 @@ skipped). Each cycle performs steps 1-4, then 6, then 7.
 
 ### Before every cycle: budget check
 
-Read `budget.yaml` at the project root. Treat these fields as
-**implicit halting conditions** that compose with any explicit
-`--chain-until`:
+Run the halting evaluator, passing your chain-local counters:
 
-| budget.yaml field                      | implicit condition                  |
-| -------------------------------------- | ----------------------------------- |
-| `max_wall_hours`                       | `wall_hours:gte:<value>`            |
-| `max_tokens`                           | `tokens_spent:gte:<value>`          |
-| `max_experiments`                      | `experiments_completed:gte:<value>` |
-| `max_consecutive_no_improvement`       | `consecutive_no_improvement:gte:<value>` |
-| `max_disk_gb`                          | disk-usage check — see below        |
+```bash
+~/claude-system/coordinator/.venv/bin/python \
+  ~/claude-system/scripts/chain_budget.py \
+  --root <project> --chain-start <ISO> \
+  [--until <k:op:v>]... \
+  --experiments-completed <n> --consecutive-no-improvement <n> \
+  [--metric-value <x>]
+```
 
-`tokens_spent` is the running sum from `_meta/token_log.ndjson` (written by
-the `token_logger` Stop hook). `wall_hours` is counted from the start of
-the chain. `experiments_completed` and `consecutive_no_improvement` are
-counted from the start of the chain. `max_disk_gb` is checked by comparing
-`du -s <project-root>` to the limit — go above and halt.
+It reads `budget.yaml`'s ceilings as implicit conditions, sums
+`_meta/token_log.ndjson` since chain start, checks disk against
+`max_disk_gb`, and returns `{halt, tripped, totals}`. Halt when it says
+halt, and name the tripped condition. Write one line per cycle to
+`_meta/iteration_log.md` with a `budget{...}` suffix from `totals` so
+the user can see the running numbers.
 
-Write one line per cycle to `_meta/iteration_log.md` in a `budget{...}`
-suffix so the user can see the running totals.
-
-If budget.yaml is missing, chain on explicit `--chain N` /
-`--chain-until` only; log a warning on the first cycle.
+If budget.yaml is missing (`budget_present: false`), chain on explicit
+`--chain N` / `--chain-until` only; log a warning on the first cycle.
 
 ### Halt conditions (any triggers a stop)
 
