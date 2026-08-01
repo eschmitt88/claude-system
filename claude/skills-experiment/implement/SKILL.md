@@ -2,7 +2,7 @@
 name: implement
 description: Execute a proposal inside a fresh subagent — the MLE-IDEATOR separation boundary and the only skill allowed to spawn a subagent. The subagent runs /new-experiment, writes code + config.yaml, executes dvc exp run, captures metrics and results, then writes a structured Diagnostics section to README.md. On success, files the proposal under experiments/_proposals/_done/ with status: implemented; on hard failure, files it under _proposals/_failed/ with the captured error. Supports --seeds N for pass@k multi-seed runs and --implementer-model <slug> to pick the subagent model (default from budget.yaml).
 respects:
-  - ~/.claude/rules/evaluation.md
+  - ~/claude-system/claude/rules/evaluation.md
 ---
 
 # implement
@@ -63,7 +63,7 @@ that is allowed to spawn a subagent.
    a. The full text of the proposal file.
    b. `~/.claude/CLAUDE.md` (durable principles).
    c. The project-root `CLAUDE.md`.
-   d. `~/.claude/rules/evaluation.md` (the HCE rule — non-negotiable).
+   d. `~/claude-system/claude/rules/evaluation.md` (the HCE rule — non-negotiable).
    e. Any other `.claude/rules/*.md` whose scope covers
       `experiments/**` or paths the proposal will touch. Include each
       file's full text.
@@ -76,7 +76,7 @@ that is allowed to spawn a subagent.
      of domain: literature triage, scraping, analysis, ML — all
      valid.)
    - If the project opts into HCE (see
-     `~/.claude/rules/evaluation.md`): `test/` is off-limits,
+     `~/claude-system/claude/rules/evaluation.md`): `test/` is off-limits,
      `metrics.json` is the search signal, `final_metrics.json` is
      never written during search. Skip this clause entirely for
      projects without an evaluation holdout.
@@ -170,4 +170,4 @@ that is allowed to spawn a subagent.
   disagree with the proposal, stop and say so rather than silently
   editing it. Proposals are edited via `/propose`, not `/implement`.
 - **HCE rule** — the subagent must not read `test/` and must not write
-  `final_metrics.json`. See `~/.claude/rules/evaluation.md`.
+  `final_metrics.json`. See `~/claude-system/claude/rules/evaluation.md`.

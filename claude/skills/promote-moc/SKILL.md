@@ -2,7 +2,7 @@
 name: promote-moc
 description: Promote a ripe cluster of related concepts into a Map of Content at mocs/<theme>.md. Detects clusters of >=5 related concepts on a theme that are not already substantially covered by an existing MoC, then synthesizes the MoC (framing + layered organization + concept wikilinks) from the concept files. In standard repos it proposes and waits; in `agency: max` repos it creates, commits, and pushes autonomously. This is the "act on it" counterpart to /lint's MoC-candidate detection.
 respects:
-  - ~/.claude/rules/agency.md
+  - ~/claude-system/claude/rules/agency.md
 ---
 
 # promote-moc
@@ -65,7 +65,7 @@ restraint is the point: the value is in real structure, not MoC count.
 5. **Update** `_meta/index.md` (list the new MoC) and append to
    `_meta/log.md`: `YYYY-MM-DD HH:MM promote-moc <theme> (<N> concepts)`.
 
-6. **Persist** per `~/.claude/rules/agency.md`:
+6. **Persist** per `~/claude-system/claude/rules/agency.md`:
    - **`agency: standard`** — show the diff and wait for confirmation.
    - **`agency: max`** — write, then `git add -A && git commit && git push`
      (so the Pages site updates). Commit message:

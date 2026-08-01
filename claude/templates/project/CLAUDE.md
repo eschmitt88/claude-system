@@ -26,6 +26,12 @@ touch matching paths:
 @.claude/rules/notebooks.md
 @.claude/rules/data.md
 
+Framework rules load here (per-project, not globally — they only cost
+context where they can apply):
+
+@~/claude-system/claude/rules/evaluation.md
+@~/claude-system/claude/rules/agency.md
+
 ## Budget & compute
 
 Autonomous runs read `budget.yaml` at this project's root for hard

@@ -2,8 +2,8 @@
 name: discover
 description: Web-grounded literature triage. /discover <topic> [--n N] uses WebSearch and WebFetch to surface recent papers, repos, and posts on a topic, then writes a single ranked triage file to raw/_candidates/YYYY-MM-DD-<slug>.md. Each entry has title, URL, source type, one-line summary, and the reasoning for inclusion. Default N=10. Does not fetch full PDFs — /fetch-paper does that.
 respects:
-  - ~/.claude/rules/evaluation.md
-  - ~/.claude/rules/agency.md
+  - ~/claude-system/claude/rules/evaluation.md
+  - ~/claude-system/claude/rules/agency.md
 ---
 
 # discover
@@ -90,6 +90,10 @@ stale; the web is not.
 - Does not download full PDFs. That is `/fetch-paper`'s job — the user
   curates this list and then invokes `/fetch-paper` on the entries
   they want to read.
+- Does not create a standing obligation. In an `agency: standard` repo
+  the candidates file is a triage note to use if and when useful —
+  `/lint` tracks backlog staleness only in `agency: max` repos, where
+  the nightly `/curate` sweep actually drains it.
 - Does not create literature notes. That happens later via `/ingest`.
 - Does not write to `literature/`, `concepts/`, or any experiment
   folder.

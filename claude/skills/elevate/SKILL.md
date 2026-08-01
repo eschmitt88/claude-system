@@ -2,7 +2,7 @@
 name: elevate
 description: Evaluate whether ideas in the agentic-research knowledge graph should be adopted into claude-system itself (skills / hooks / rules / settings). For each idea that clears a high reputability-of-evidence bar AND a simplicity bar, write a proposal that makes the case and elevates it for human review under docs/system-proposals/. Never edits claude-system; never applies a change. Most cycles correctly produce zero proposals.
 respects:
-  - ~/.claude/rules/agency.md
+  - ~/claude-system/claude/rules/agency.md
 ---
 
 # elevate
@@ -134,7 +134,7 @@ viable form is complex, that is itself a reason to hold.
    a few words on what was considered and held — silence must not read as
    "nothing was examined."
 
-7. **Persist** per `~/.claude/rules/agency.md`: commit and push the
+7. **Persist** per `~/claude-system/claude/rules/agency.md`: commit and push the
    proposal files **in the agentic-research repo only**. Do **not** stage,
    commit, or push anything in `~/claude-system`.
 

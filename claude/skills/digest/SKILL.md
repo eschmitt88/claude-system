@@ -2,8 +2,8 @@
 name: digest
 description: /digest runs a web sweep for fresh items related to the project's active concepts and recent iterations since the last digest timestamp in _meta/last_digest, and drops new candidates into raw/_candidates/. Designed for invocation by cron or the schedule skill. Updates _meta/last_digest on completion. In standard repos never auto-ingests (the user curates); in `agency: max` repos it auto-fetches and ingests the top candidates while the coordinator's headroom verdict permits.
 respects:
-  - ~/.claude/rules/evaluation.md
-  - ~/.claude/rules/agency.md
+  - ~/claude-system/claude/rules/evaluation.md
+  - ~/claude-system/claude/rules/agency.md
 ---
 
 # digest
@@ -74,7 +74,7 @@ would be searched without writing).
 8. **Agency auto-advance** (only in `agency: max` repos — read
    `budget.yaml`). After writing candidates, consult the headroom
    verdict and clear the backlog instead of leaving it for manual
-   curation (per `~/.claude/rules/agency.md`):
+   curation (per `~/claude-system/claude/rules/agency.md`):
 
    ```sh
    ~/claude-system/coordinator/.venv/bin/claude-coordinator-agency --json

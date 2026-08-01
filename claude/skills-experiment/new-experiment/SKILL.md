@@ -2,7 +2,7 @@
 name: new-experiment
 description: Scaffold an experiment folder at experiments/YYYY-MM-DD-<slug>/ with README.md, notes.qmd, config.yaml, results/, log.md, metrics.json. Pre-fills frontmatter from _meta/templates/experiment.md. If the project opts into HCE (has a splits.yaml or test/ directory), also copies the split spec — otherwise splits.yaml is skipped.
 respects:
-  - ~/.claude/rules/evaluation.md
+  - ~/claude-system/claude/rules/evaluation.md
 ---
 
 # new-experiment
@@ -43,7 +43,7 @@ folder convention.
    - `metrics.json` — `{}` so DVC has something to track.
 
 3. **HCE mode (optional).** Check whether this project opts into the
-   HCE rule (triggers: `~/.claude/rules/evaluation.md`, "When this
+   HCE rule (triggers: `~/claude-system/claude/rules/evaluation.md`, "When this
    rule applies").
 
    **If opted-in:**
@@ -62,7 +62,7 @@ folder convention.
      ```
      and tell the user where to promote it.
    - **Do not** create `final_metrics.json` here — final-pass only,
-     per `~/.claude/rules/evaluation.md` clause 2.
+     per `~/claude-system/claude/rules/evaluation.md` clause 2.
 
    **If not opted-in:** skip `splits.yaml` entirely. The experiment
    has no held-out evaluation. `metrics.json` is still the canonical
@@ -84,4 +84,4 @@ folder convention.
   fields and move the folder out of "Active experiments" in
   `_meta/index.md`.
 - Changing `splits.yaml` inside an HCE-scoped project is a breaking
-  change — `~/.claude/rules/evaluation.md` clause 3.
+  change — `~/claude-system/claude/rules/evaluation.md` clause 3.

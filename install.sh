@@ -46,9 +46,15 @@ link() {
 }
 
 echo "=> Linking framework directories into $CLAUDE_DIR/"
-for sub in rules skills hooks templates; do
+# rules/ is deliberately NOT linked: evaluation.md/agency.md load via
+# project-CLAUDE.md @imports so they cost context only where they apply
+# (instruction-ablation-program, phase 5). Skills reference them by
+# their stable ~/claude-system/claude/rules/ paths.
+for sub in skills hooks templates; do
   link "$REPO_ROOT/claude/$sub" "$CLAUDE_DIR/$sub"
 done
+# Clean up the pre-phase-5 global rules link if present.
+if [ -L "$CLAUDE_DIR/rules" ]; then rm "$CLAUDE_DIR/rules"; echo "  [unlink] $CLAUDE_DIR/rules (rules now load per-project)"; fi
 
 echo "=> Linking framework files into $CLAUDE_DIR/"
 for f in CLAUDE.md settings.json; do

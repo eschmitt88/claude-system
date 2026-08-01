@@ -77,6 +77,13 @@ DVC tracks data and model artifacts. Git tracks code, configs, and notes.
 - The root file should orient, not explain. Long explanations belong in
   scoped rules or in `_meta/` docs.
 
+## Framework rules (research projects only)
+
+The HCE evaluation discipline and the agency (autonomous-spend) levels
+live at `~/claude-system/claude/rules/{evaluation,agency}.md` and load
+via each research project's `CLAUDE.md` `@import`s — not globally, so
+they cost context only where they apply.
+
 ## Knowledge graph hygiene
 
 - When ≥5 related concepts accumulate on a theme, promote them to a

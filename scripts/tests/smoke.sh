@@ -38,9 +38,9 @@ tags: [demo]
 # sourceless-idea
 See [[missing-target]].
 EOF
-touch -d "2026-01-01" "$P/raw/_candidates/2026-01-01-old.md" 2>/dev/null \
-  || touch "$P/raw/_candidates/2026-01-01-old.md"
 echo "x" > "$P/raw/_candidates/2026-01-01-old.md"
+# stale-candidates is an obligation only in managed (agency: max) repos
+echo "agency: max" > "$P/budget.yaml"
 
 # experiments mode + HCE violation fixture
 mkdir -p "$P/experiments/2026-01-02-demo"
@@ -76,6 +76,9 @@ rm -r "$P/experiments/2026-01-02-demo"
 OUT2="$("$PY" "$SCRIPTS/kg_lint.py" --root "$P" --json)" && RC2=0 || RC2=$?
 check "kg_lint exits 0 in research mode"        "[ $RC2 -eq 0 ]"
 check "kg_lint detects research mode"           "echo '$OUT2' | grep -q '\"mode\": \"research\"'"
+sed -i 's/agency: max/agency: standard/' "$P/budget.yaml"
+OUT3="$("$PY" "$SCRIPTS/kg_lint.py" --root "$P" --json)" || true
+check "kg_lint mutes stale candidates in standard"  "! echo '$OUT3' | grep -q '\"stale_candidates\": \[$' || echo '$OUT3' | python3 -c 'import json,sys; r=json.load(sys.stdin); sys.exit(0 if r[\"stale_candidates\"]==[] and r[\"candidates_count\"]==1 else 1)'"
 
 # ---- chain_budget -------------------------------------------------------
 cat > "$P/budget.yaml" <<'EOF'
