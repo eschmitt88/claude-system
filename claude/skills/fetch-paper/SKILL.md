@@ -25,7 +25,7 @@ input leaves the filesystem unchanged the second time.
 
 ## Steps
 
-1. **Locate the active project.** Refuse if none.
+1. **Refuse if the cwd is not inside a project.**
 
 2. **Classify the input**:
    - arXiv → target is `raw/papers/<citekey>.pdf`, kind=paper.
@@ -78,8 +78,6 @@ input leaves the filesystem unchanged the second time.
    it will issue its own commit covering the literature/concept
    updates. The fetch-paper commit covers only the raw addition;
    the two commits together tell the full provenance story.
-   Rationale: git is the memory layer per `CLAUDE.md`, and
-   commits are reversible (`git revert`).
 
 ## Constraints
 

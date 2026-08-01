@@ -28,8 +28,7 @@ experiment CLAUDE.md. It **never reads from** `prepared/private/`
 
 ## Steps
 
-1. **Locate the active project**: nearest ancestor of CWD that has
-   both `CLAUDE.md` and `_meta/`. Refuse if none.
+1. **Refuse if the cwd is not inside a project.**
 
 2. **Locate the MLE-bench install**:
    - Expect `<project>/external/mle-bench/` with a working `.venv/`.

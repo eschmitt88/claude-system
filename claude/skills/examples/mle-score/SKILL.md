@@ -36,8 +36,7 @@ score completed work, not to rescue aborted runs.
 
 ## Steps
 
-1. **Locate the active project**: nearest ancestor of CWD that has
-   both `CLAUDE.md` and `_meta/`. Refuse if none.
+1. **Refuse if the cwd is not inside a project.**
 
 2. **Validate the experiment**:
    - Resolve `<experiment-path>` to an absolute path.

@@ -9,11 +9,9 @@ Close a work session by committing Did/Findings/Next to `NOTES.md`.
 
 ## Steps
 
-1. **Locate the active project**: the current working directory's project
-   root (nearest ancestor containing both `CLAUDE.md` and `_meta/`).
-   Refuse if no project is found.
+Operate on the active project; refuse if the cwd isn't inside one.
 
-2. **Read context**: tail the last 50 lines of `NOTES.md`. If today's
+1. **Read context**: tail the last 50 lines of `NOTES.md`. If today's
    date (`YYYY-MM-DD` local) already has a heading, append under the
    existing heading's subsections rather than creating a duplicate
    `## YYYY-MM-DD`.
@@ -42,7 +40,7 @@ Close a work session by committing Did/Findings/Next to `NOTES.md`.
    `status: done` README with an empty `## Result` section, which
    future readers (or `/lint`) will then have to chase down.
 
-3. **Draft the entry** based on the conversation so far:
+2. **Draft the entry** based on the conversation so far:
 
    ```markdown
    ## YYYY-MM-DD
@@ -60,57 +58,30 @@ Close a work session by committing Did/Findings/Next to `NOTES.md`.
    Each bullet is specific, past-tense, and names files/experiments
    touched. Empty sections are allowed — better than filler.
 
-4. **Structured block** (only when the session happened inside an
+3. **Structured block** (only when the session happened inside an
    experiment folder — i.e. the cwd is at or under
-   `experiments/YYYY-MM-DD-<slug>/`). Append this directly beneath the
-   `### Next` subsection:
-
-   ```markdown
-   ### Structured
-
-   ```yaml
-   intended_effect: "<what this session was trying to cause>"
-   intended_effect_confirmed: <yes | no | partial | unclear>
-   diagnostics.leakage_check: "<method — finding, or 'n/a'>"
-   diagnostics.overfitting_signal: "<train/val gap — interpretation, or 'n/a'>"
-   diagnostics.data_quality_issues: "<one line, or 'none'>"
-   delta_from_prior: "<vs <prior-slug>, metric delta and cause>"
-   next_candidates:
-     - "<one-sentence follow-up 1>"
-     - "<one-sentence follow-up 2>"
-   ```
-   ```
-
-   Keys are **flat** — nested diagnostics use dotted names
-   (`diagnostics.leakage_check`, etc.) rather than a nested map, so the
-   block stays greppable. Leave a field as `"unclear"` or `"n/a"`
-   rather than omitting it.
+   `experiments/YYYY-MM-DD-<slug>/`). Append a `### Structured`
+   subsection beneath `### Next` containing a flat YAML block using
+   the **canonical Diagnostics field names from `/implement` step 5**
+   (`intended_effect_confirmed`, `leakage_check`,
+   `overfitting_signal`, `delta_from_prior`, `unexpected_findings`,
+   `next_candidates`) — plain keys, one per line, so the block stays
+   greppable. Leave a field as `"unclear"` or `"n/a"` rather than
+   omitting it.
 
    **If the session was NOT inside an experiment folder**, skip the
    Structured block entirely. Instead, append one line to
    `_meta/log.md`:
    `YYYY-MM-DD HH:MM wrap-skip-structured reason=<cwd-not-in-experiment>`.
 
-5. **Update `_meta/index.md`**: if new experiments started or finished,
+4. **Update `_meta/index.md`**: if new experiments started or finished,
    reflect that in the "Active experiments" section.
 
-6. **Append to `_meta/log.md`**: one line,
+5. **Append to `_meta/log.md`**: one line,
    `YYYY-MM-DD HH:MM wrap <one-line-summary>`.
 
-7. **Write the changes and commit.** This is an agentic workflow:
-   skip the human confirmation gate. After writing all the files,
-   run:
-
-   ```sh
-   git add -A
-   git commit -m "wrap YYYY-MM-DD: <one-line summary from step 6>"
-   ```
-
-   Then print the new commit hash. Rationale: git is the memory
-   layer per `CLAUDE.md`, and commits are reversible (`git revert`
-   or `git reset --soft HEAD~1`), so the default is to commit
-   rather than leave the working tree dirty. The user can amend,
-   split, or revert after the fact if needed.
+6. **Write the changes, commit, and print the commit hash** — an
+   artifact write, so no confirmation gate.
 
 ## Why enforce this
 

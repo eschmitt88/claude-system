@@ -15,8 +15,7 @@ its imports the moment they're added to CLAUDE.md.
 
 ## Arguments
 
-None. Operates on the active project (nearest ancestor with `CLAUDE.md`
-and `_meta/`).
+None. Operates on the active project.
 
 ## When to use
 
@@ -34,8 +33,7 @@ action. The meta project doesn't back-reference itself.
 
 ## Steps
 
-1. **Locate the active project**: nearest ancestor of CWD with both
-   `CLAUDE.md` and `_meta/`. Refuse if none.
+1. **Refuse if the cwd is not inside a project.**
 
 2. **Skip self-reference**: if the project basename is
    `agentic-research`, exit 0 with a one-line message.

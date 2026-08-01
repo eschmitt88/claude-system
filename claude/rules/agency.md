@@ -52,9 +52,10 @@ every few units of work), not just once — quota and GPU state move.
 - **`/digest`** — after writing candidates, if `agency: max` and the
   verdict is not `hold`, **auto-advance the backlog**: `/fetch-paper` +
   `/ingest` the highest-ranked candidates (count scaled by
-  aggressiveness — e.g. up to ~6 on `high`, ~2 on `low`), instead of
-  leaving them for manual curation. This is the deliberate relaxation of
-  `/digest`'s "never auto-ingest" default, scoped to opt-in repos.
+  aggressiveness — this is the canonical scale: ~6 on `high`, ~3 on
+  `normal`, ~2 on `low`), instead of leaving them for manual curation.
+  This is the deliberate relaxation of `/digest`'s "never auto-ingest"
+  default, scoped to opt-in repos.
 - **`/discover` / `/fetch-paper` / `/ingest`** — already commit without a
   confirmation gate; under `max` they may also be chained automatically by
   `/digest` rather than user-invoked one at a time.

@@ -38,7 +38,7 @@ restraint is the point: the value is in real structure, not MoC count.
 
 ## Steps
 
-1. **Locate the active project.** Refuse if it has no `concepts/`.
+1. **Refuse if the active project has no `concepts/`.**
 
 2. **Detect** per the ripeness test above. List every candidate cluster
    with its concept count and overlap with existing MoCs, then pick the
