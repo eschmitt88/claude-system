@@ -1,8 +1,9 @@
 ---
 name: derive-experiment
-description: Turn one literature note into an experiment proposal. Reads the note + frontmatter, extracts the core claim or technique, and proposes an experiment that replicates, tests, or extends that claim in the context of the active project (using the NOTES.md tail and project README.md for framing). Output format matches /propose exactly. Appends the new proposal's slug to the literature note's related_experiments: frontmatter field. Shows both diffs and waits for confirmation.
+description: Turn one literature note into an experiment proposal. Reads the note + frontmatter, extracts the core claim or technique, and proposes an experiment that replicates, tests, or extends that claim in the context of the active project (using the NOTES.md tail and project README.md for framing). Output format matches /propose exactly. Appends the new proposal's slug to the literature note's related_experiments: frontmatter field. Persists per agency.md's Confirmation principle (confirm under standard, auto-advance under max).
 respects:
   - ~/.claude/rules/evaluation.md
+  - ~/.claude/rules/agency.md
 ---
 
 # derive-experiment
@@ -53,8 +54,10 @@ Bridge from a single paper/repo/post to a testable experiment.
    list if missing). Do not touch any other frontmatter field, and
    do not modify the body of the note.
 
-6. **Show both diffs** — the new proposal file and the updated
-   literature note — and wait for confirmation before writing either.
+6. **Persist both files per the Confirmation principle** (`agency.md`):
+   a derived proposal is hypothesis selection — show both diffs and
+   confirm under `agency: standard`; write and continue under
+   `agency: max`.
 
 7. **After writing**, append one line to `_meta/log.md`:
    `YYYY-MM-DD HH:MM derive-experiment <lit-note-path> → <proposal-slug>`.
