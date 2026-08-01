@@ -17,7 +17,7 @@ Bridge from a single paper/repo/post to a testable experiment.
 
 ## Steps
 
-1. **Locate the active project** and read:
+1. **Read**, in the active project:
    - the target literature note in full, including frontmatter
    - the project-root `README.md`
    - the last 50 lines of `NOTES.md`

@@ -51,11 +51,9 @@ halts. A subagent hard failure always halts regardless of flags.
 
 ## Evaluation discipline (HCE)
 
-Between cycles, `/iterate` reads **only** each completed experiment's
-`metrics.json` (validation split — this is the search signal). It
-does **not** read `final_metrics.json` and does **not** read anything
-under `test/`. The final-scoring pass is explicit and outside the
-loop. See `~/.claude/rules/evaluation.md`.
+Between cycles, read **only** each completed experiment's
+`metrics.json` — never `final_metrics.json` or `test/`
+(`~/.claude/rules/evaluation.md`).
 
 ## Steps (single cycle; default)
 
@@ -189,5 +187,3 @@ that's `/implement --seeds N`.
 - In `--chain` / `--chain-until` mode, still show each proposal and
   each experiment summary to the user as you go — they should be able
   to interrupt at any cycle boundary.
-- Never read `final_metrics.json` or `test/` from inside the loop.
-  That is a lint-level hard failure under the HCE rule.

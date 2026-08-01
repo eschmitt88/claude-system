@@ -49,7 +49,7 @@ that is allowed to spawn a subagent.
 
 ## Steps
 
-1. **Locate the active project** and resolve the proposal path.
+1. **Resolve the proposal path** in the active project.
 
 2. **Read `budget.yaml`** at the project root (if present). Use it to
    resolve `--implementer-model`'s default and to surface the

@@ -25,8 +25,8 @@ stale; the web is not.
 
 ## Steps
 
-1. **Locate the active project** (nearest ancestor with `CLAUDE.md`
-   and `_meta/`). Refuse if none — `discover` writes into a project.
+1. **Refuse if the cwd is not inside a project** — `discover` writes
+   into a project.
 
 2. **Search**. Use `WebSearch` with one or two focused queries for the
    topic. When a result is plausibly relevant, use `WebFetch` to pull

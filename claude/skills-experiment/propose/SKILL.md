@@ -23,16 +23,12 @@ output is a decision document.
 
 ## Steps
 
-1. **Locate the active project** (nearest ancestor with both `CLAUDE.md`
-   and `_meta/`). Refuse if none.
-
-2. **Gather context** — read the following, and nothing else from the
+1. **Gather context** — read the following, and nothing else from the
    filesystem beyond templates:
    - all files under `concepts/`
    - the **10 most recently modified** `literature/**/*.md`
    - the **5 most recent** `experiments/*/README.md` and each sibling
-     `metrics.json` (validation split — the search signal; **do not**
-     read `final_metrics.json` or anything under `test/`, see
+     `metrics.json` (never `final_metrics.json` or `test/` —
      `~/.claude/rules/evaluation.md`)
    - the last 50 lines of `NOTES.md`
    - `budget.yaml` at the project root (if present) — so
@@ -41,13 +37,13 @@ output is a decision document.
    - if a concept/MoC argument was given, that file plus any files it
      wikilinks to (one hop)
 
-3. **Pick a slug**. Derive a short kebab-case slug from the core idea.
+2. **Pick a slug**. Derive a short kebab-case slug from the core idea.
    The proposal path is
    `experiments/_proposals/YYYY-MM-DD-<slug>.md` using today's local
    date. Create `experiments/_proposals/` if missing. Refuse if the
    target path already exists.
 
-4. **Draft the proposal** with this frontmatter (all flat YAML, no
+3. **Draft the proposal** with this frontmatter (all flat YAML, no
    nested schemas):
 
    ```yaml
@@ -77,21 +73,21 @@ output is a decision document.
    ---
    ```
 
-   Every `reads:` entry must be a real file you actually opened in step 2
+   Every `reads:` entry must be a real file you actually opened in step 1
    — no decorative citations. `related_prior:` slugs must match existing
    `experiments/*/` folders.
 
-5. **Write the body** below the frontmatter: a longer prose argument
+4. **Write the body** below the frontmatter: a longer prose argument
    (not bullets) explaining why this hypothesis is worth testing now,
    what evidence from the cited notes motivates it, and how the
    expected metric movement would update your beliefs. Keep it tight —
    aim for 200–400 words.
 
-6. **Show the diff** for the single new file and wait for confirmation
+5. **Show the diff** for the single new file and wait for confirmation
    before writing. Do not create any other files. Do not touch
    `dvc.yaml`, `config.yaml`, or any experiment folder.
 
-7. **After writing**, append one line to `_meta/log.md`:
+6. **After writing**, append one line to `_meta/log.md`:
    `YYYY-MM-DD HH:MM propose <slug>`.
 
 ## What this skill does NOT do
@@ -121,7 +117,7 @@ Deltas from the default mode:
   evidence. **Do not modify the parent** — it stays individually
   implementable.
 - Each child is an ordinary proposal (same frontmatter keys, body
-  rules, and step-6 confirmation as above; fresh `date:`,
+  rules, and step-5 confirmation as above; fresh `date:`,
   `status: proposed`) plus two extra fields:
   `parent: "<parent-slug>"` and
   `expansion_axis: "<one-line label for what varies>"`.

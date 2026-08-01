@@ -25,7 +25,7 @@ would be searched without writing).
 
 ## Steps
 
-1. **Locate the active project.** Refuse if none.
+1. **Refuse if the cwd is not inside a project.**
 
 2. **Determine the window.** Read `_meta/last_digest`:
    - If the file exists and contains a parseable ISO timestamp, the
@@ -85,8 +85,8 @@ would be searched without writing).
      curate-later behavior.
    - Otherwise, take the highest-ranked candidates (just written, plus
      any stale uncurated ones already in `raw/_candidates/`) and run
-     `/fetch-paper` then `/ingest` on each, **count scaled by
-     `aggressiveness`**: ~6 on `high`, ~3 on `normal`, ~2 on `low`.
+     `/fetch-paper` then `/ingest` on each, count scaled by
+     `aggressiveness` (canonical scale: `agency.md`).
      Skip anything already in the graph. Re-check the verdict every
      couple of items and stop early on `hold` or when a `budget.yaml`
      ceiling is hit.
