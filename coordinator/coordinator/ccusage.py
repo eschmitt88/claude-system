@@ -22,7 +22,9 @@ from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
-_TIMEOUT_S = 8
+# A legit `blocks` run was measured at 6.3s on 2026-08-03 (scales with
+# transcript volume) and was flaking against the old 8s bound.
+_TIMEOUT_S = 30
 _BIN = "ccusage"
 # systemd user services get the stock PATH (/usr/bin:...), which does not
 # include the npm global prefix where ccusage lives — shutil.which() fails
@@ -95,23 +97,27 @@ MAX_20X_5H_TOKEN_LIMIT = 184_000_000
 #     Handled via the weekly-limit override file (below), expired at the
 #     07-27 reset.
 #   2026-08-02: 1063.17M tok, $880.31 = 46% → ~$1914/week, ~2.31B tok/week
-#     implied. No bonus reported this week, so this is a base recalibration,
-#     not an override. Note the drift: implied USD ceilings run 378 → ~692
-#     (bonus-adjusted) → 1914 across three windows. This window's mix is
-#     ~97% cache-read tokens; the likely explanation is that Anthropic's
-#     quota weights cache reads far cheaper than ccusage prices them, so
-#     our USD "constant" inflates as the cache-read share grows. The USD
-#     ceiling is therefore mix-stable only within a similar cache profile.
+#     implied. Initially read as a base recalibration; corrected 08-03 when
+#     the user learned the +50% Claude Code weekly bonus (first seen week of
+#     07-20) was in fact still active and is extended through 2026-08-19.
+#     So $1914 is the *bonused* ceiling and the base is ~$1276 (= 1914/1.5);
+#     $1914 lives in the override file while the bonus runs. Bonus-free
+#     implied bases now run 378 → ~692 → ~1276 across three windows. The
+#     08-02 window's mix was ~97% cache-read tokens; the likely explanation
+#     for the residual drift is that Anthropic's quota weights cache reads
+#     far cheaper than ccusage prices them, so our USD "constant" inflates
+#     as the cache-read share grows. The USD ceiling is therefore mix-stable
+#     only within a similar cache profile.
 # Anthropic's quota is evidently **cost-weighted** (the 05-22 → 07-15
 # token-implied ceiling moved ~2.4x, consistent with Fable 5 costing 2x
 # Opus per token), so USD remains the primary basis for the weekly %. The
-# token constant below is the current mix's equivalent, kept only as a
-# fallback for windows where ccusage can't price the blocks (all-unknown-
-# model mix). Recalibrate both whenever the dashboard % drifts from
-# claude.ai's displayed % — and given the drift above, check early in
+# token constant below is the current mix's bonus-free equivalent, kept
+# only as a fallback for windows where ccusage can't price the blocks
+# (all-unknown-model mix). Recalibrate both whenever the dashboard % drifts
+# from claude.ai's displayed % — and given the drift above, check early in
 # every window, not just when it looks wrong.
-MAX_20X_WEEKLY_COST_LIMIT_USD = 1914.0
-MAX_20X_WEEKLY_TOKEN_LIMIT = 2_311_000_000
+MAX_20X_WEEKLY_COST_LIMIT_USD = 1276.0
+MAX_20X_WEEKLY_TOKEN_LIMIT = 1_541_000_000
 
 # Anthropic resets the weekly quota at Mon 17:00 in the user's local TZ
 # (displayed on claude.ai/settings/usage). System runs in UTC; if the
