@@ -19,6 +19,10 @@ dist/
 .env
 *.secret
 
+# Machine-specific service/port registry (copy services.example.yaml) —
+# contains real hostnames/IPs, never committed
+registry/services.yaml
+
 # OS / editor
 .DS_Store
 *.swp
