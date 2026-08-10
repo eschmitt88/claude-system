@@ -41,7 +41,7 @@
               <a class="btn primary" href="/projects/{{ r.name }}/dashboard/" target="_blank" rel="noopener">Open dashboard ↗</a>
             {% elif r.dashboard.kind == "server" %}
               {% if r.dashboard.live %}
-                <a class="btn primary" href="{{ r.dashboard.url or ('http://aiserver2026:' ~ r.dashboard.port ~ '/') }}" target="_blank" rel="noopener">Open ↗</a>
+                <a class="btn primary" href="{{ r.dashboard.url or ('http://' ~ request.url.hostname ~ ':' ~ r.dashboard.port ~ '/') }}" target="_blank" rel="noopener">Open ↗</a>
                 <span class="port-hint mono"><span class="dot up"></span>running · port {{ r.dashboard.port }}</span>
               {% else %}
                 <span class="btn disabled" title="Service not responding on its port. Start it: {{ r.dashboard.start or 'see dashboard.yaml' }}">Not running</span>

@@ -24,7 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sse_starlette.sse import EventSourceResponse
 
-from coordinator import ccusage
+from coordinator import ccusage, config
 from coordinator.readers import latest_hardware_sample, tokens_in_last
 
 from .projects import (
@@ -180,6 +180,7 @@ def home(request: Request):
         _ctx(
             {
                 "active": "home",
+                "disk_path": config.DISK_MONITOR_PATH,
                 "hw": hw,
                 "tokens_5h": tokens_5h,
                 "tokens_7d": tokens_7d,

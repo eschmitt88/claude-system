@@ -30,7 +30,7 @@ make env    # uv sync
 make lint   # knowledge-graph / experiment health check
 ```
 
-Part of a personal research framework
-([claude-system](https://github.com/eschmitt88/claude-system)). See `CLAUDE.md`
-for the agent-facing orientation and `~/.claude/CLAUDE.md` for the framework's
-durable principles.
+Built on the [claude-system](https://github.com/eschmitt88/claude-system)
+research framework (upstream attribution — this project is its own repo).
+See `CLAUDE.md` for the agent-facing orientation and `~/.claude/CLAUDE.md`
+for the framework's durable principles.
