@@ -19,6 +19,7 @@ framework-level tour of every part and how they connect (source:
 | `claude/hooks/` | Lifecycle hooks (`SessionStart`, `Stop` = token logger, `PreToolUse` = safety net). |
 | `claude/templates/` | Project and note templates copied by `/new-project` / `/ingest`. |
 | `coordinator/` | Python package. `state.db` schema + writers, hardware poller, agency verdict. |
+| `registry/` | Service & port registry template (`services.example.yaml` → copy to untracked `services.yaml`). |
 | `dashboard/` | FastAPI + HTMX + SSE dashboard. Reads `state.db` + project files. LAN-only. |
 | `scripts/` | Maintenance + bootstrap helpers. |
 | `install.sh` | Idempotent bootstrap for a fresh machine. |
@@ -33,6 +34,8 @@ tracked by this repo.
 
 - **Linux** with `systemd --user` (runs the dashboard + hardware poller).
 - **`git`**, **`uv`** (Python env manager), **Python 3.12**.
+- **`jq`** (every lifecycle hook parses its payload with it) and a system
+  **`python3` with PyYAML** (the session-end hook reads `budget.yaml`).
 - Optional: **`gh`** (GitHub CLI — lets `/new-project` create repos and
   enable Pages); **`ccusage`** (`npm i -g ccusage` — accurate quota in
   `/headroom`); an **NVIDIA GPU** with drivers (GPU stats; absence is
@@ -56,6 +59,16 @@ venvs, initializes `~/.claude/state.db`, bakes your config into the systemd
 units, and starts them. Re-run it any time to upgrade or to apply config
 changes.
 
+> **⚠️ Review before installing — you adopt this repo's agent behavior.**
+> `install.sh` symlinks `claude/CLAUDE.md` and `claude/settings.json` into
+> `~/.claude/` as *your* global instructions and settings (existing files
+> are backed up first). These carry opinionated defaults: the instructions
+> tell agents to **commit and push automatically** at checkpoints in every
+> git repo, and the settings **suppress permission prompts**
+> (`skipDangerousModePermissionPrompt`, `skipAutoPermissionPrompt`) and pin
+> a default model. If you don't want that posture, edit those two files
+> (or your `~/.claude/` copies) before letting agents loose.
+
 ### Configure
 
 All machine-specific settings live in **one file: `~/.claude/.env`**
@@ -69,6 +82,20 @@ optional and falls back to the default below. Edit, then re-run
 | `DISK_MONITOR_PATH` | `~/projects` (else `~`) | Volume sampled for free disk in `/headroom` + dashboard — point at your data drive. |
 | `CLAUDE_DASHBOARD_BIND` | `0.0.0.0:8080` | Dashboard `host:port`. Use `127.0.0.1:8080` for localhost-only. |
 | `NTFY_TOPIC` | — | [ntfy.sh](https://ntfy.sh/) topic for notifications. |
+| `QUOTA_WEEKLY_COST_LIMIT_USD` | see `ccusage.py` | Calibrated weekly plan ceiling (USD) for `/headroom` + dashboard %. |
+| `QUOTA_WEEKLY_TOKEN_LIMIT` / `QUOTA_5H_TOKEN_LIMIT` | see `ccusage.py` | Token fallbacks for the weekly / 5h windows. |
+| `QUOTA_WEEKLY_RESET_HOUR` / `QUOTA_WEEKLY_RESET_WEEKDAY` | `17` / `0` (Mon) | Weekly quota reset boundary as shown on claude.ai. |
+
+The quota defaults are one Max-20x subscription's calibration — see the
+calibration note at the top of the constants block in
+[`coordinator/coordinator/ccusage.py`](coordinator/coordinator/ccusage.py)
+for how to derive yours from a live claude.ai reading.
+
+The service/port registry rendered by the dashboard's `/ports` page is
+machine-specific and **untracked**: copy
+[`registry/services.example.yaml`](registry/services.example.yaml) to
+`registry/services.yaml` and describe your own services (the page is
+empty without it).
 
 These resolve through `coordinator/config.py`, so the code works even with
 an empty `.env`; the file only overrides defaults.
@@ -207,4 +234,4 @@ Runtime state must never be committed. The `.gitignore` is strict on
 
 ## License
 
-Private. All rights reserved unless explicitly licensed.
+[MIT](LICENSE).
