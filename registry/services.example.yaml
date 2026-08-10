@@ -1,0 +1,52 @@
+# Service & port registry — single source of truth for what runs where.
+#
+# Copy this file to registry/services.yaml (which is gitignored — your real
+# registry contains hostnames/IPs and should stay out of a public repo) and
+# edit it to match your machine. The dashboard /ports page renders it and
+# live-probes each concrete port; if services.yaml is absent the page is
+# simply empty.
+#
+# Keep ports inside their owner's block so services don't collide. When
+# adding a service-backed project to the hub that lives OUTSIDE your
+# PROJECTS_ROOT, also list it under `extra_projects:` below.
+
+host: myhost                 # LAN hostname of this machine
+# Optional extra addresses, if you use them in service URLs below:
+# tailscale_ip: 100.64.0.1   # your tailnet address (tailscale ip -4)
+# lan_ip: 192.0.2.10         # your LAN address
+
+# Reserved port blocks. Allocate new services inside the owning block.
+blocks:
+  - range: "8080-8089"
+    owner: claude-system
+    purpose: core dashboard + agent services
+  - range: "8100-8119"
+    owner: research
+    purpose: research-project viewers / report servers
+
+services:
+  - port: 8080
+    name: claude-system dashboard
+    project: claude-system
+    bind: lan            # 0.0.0.0
+    unit: claude-dashboard.service
+    url: http://myhost:8080/
+    note: the hub itself
+
+  # Example of an additional service entry:
+  # - port: 8101
+  #   name: my-project report viewer
+  #   project: my-project
+  #   bind: lan+tailscale
+  #   tls: false
+  #   unit: my-project-report.service   # --user
+  #   url: http://myhost:8101/
+  #   note: static results report
+
+# Projects to surface on the hub that live outside PROJECTS_ROOT.
+# (Research projects are auto-discovered; these are not.)
+extra_projects: []
+  # - name: my-app
+  #   path: /home/you/projects/my-app
+  #   description: What it is.
+  #   url: http://myhost:8090/
