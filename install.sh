@@ -81,6 +81,12 @@ if [ -n "${DISK_MONITOR_PATH:-}" ]; then DISK_MONITOR_PATH_VAL="$DISK_MONITOR_PA
 elif [ -d "$HOME/projects" ]; then DISK_MONITOR_PATH_VAL="$HOME/projects"
 else DISK_MONITOR_PATH_VAL="$HOME"; fi
 DASHBOARD_BIND_VAL="${CLAUDE_DASHBOARD_BIND:-0.0.0.0:8080}"
+# Quota calibration (optional; empty = ccusage.py defaults apply).
+QUOTA_5H_TOKEN_LIMIT_VAL="${QUOTA_5H_TOKEN_LIMIT:-}"
+QUOTA_WEEKLY_COST_LIMIT_USD_VAL="${QUOTA_WEEKLY_COST_LIMIT_USD:-}"
+QUOTA_WEEKLY_TOKEN_LIMIT_VAL="${QUOTA_WEEKLY_TOKEN_LIMIT:-}"
+QUOTA_WEEKLY_RESET_HOUR_VAL="${QUOTA_WEEKLY_RESET_HOUR:-}"
+QUOTA_WEEKLY_RESET_WEEKDAY_VAL="${QUOTA_WEEKLY_RESET_WEEKDAY:-}"
 
 # Coordinator venv + state.db initialization
 if command -v uv >/dev/null 2>&1; then
@@ -111,7 +117,12 @@ for unit in claude-dashboard.service claude-hw-poller.service claude-hw-poller.t
     sed "s|{{REPO_ROOT}}|$REPO_ROOT|g; s|{{HOME}}|$HOME|g; \
          s|{{PROJECTS_ROOT}}|$PROJECTS_ROOT_VAL|g; \
          s|{{DISK_MONITOR_PATH}}|$DISK_MONITOR_PATH_VAL|g; \
-         s|{{DASHBOARD_BIND}}|$DASHBOARD_BIND_VAL|g" "$src" > "$USER_UNIT_DIR/$unit"
+         s|{{DASHBOARD_BIND}}|$DASHBOARD_BIND_VAL|g; \
+         s|{{QUOTA_5H_TOKEN_LIMIT}}|$QUOTA_5H_TOKEN_LIMIT_VAL|g; \
+         s|{{QUOTA_WEEKLY_COST_LIMIT_USD}}|$QUOTA_WEEKLY_COST_LIMIT_USD_VAL|g; \
+         s|{{QUOTA_WEEKLY_TOKEN_LIMIT}}|$QUOTA_WEEKLY_TOKEN_LIMIT_VAL|g; \
+         s|{{QUOTA_WEEKLY_RESET_HOUR}}|$QUOTA_WEEKLY_RESET_HOUR_VAL|g; \
+         s|{{QUOTA_WEEKLY_RESET_WEEKDAY}}|$QUOTA_WEEKLY_RESET_WEEKDAY_VAL|g" "$src" > "$USER_UNIT_DIR/$unit"
     echo "  [unit]   $USER_UNIT_DIR/$unit"
   fi
 done
