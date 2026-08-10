@@ -93,7 +93,7 @@
     {% set disk_total = hw.disk_used_gb + hw.disk_free_gb %}
     {% set disk_pct = 100.0 * hw.disk_used_gb / disk_total if disk_total else None %}
     {{ stat(
-      'Disk · /mnt/projects',
+      'Disk · ' ~ disk_path,
       disk_pct,
       '%.0f used / %.0f free GB'|format(hw.disk_used_gb, hw.disk_free_gb)
     ) }}

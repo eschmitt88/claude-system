@@ -23,10 +23,11 @@ models:
   implementer: "opus"
 
 # Hardware hints (read by /implement, surfaced to the subagent).
+# Edit every value to match your machine — these are placeholders.
 hardware:
-  gpu_model: "NVIDIA RTX 5080"
-  gpu_memory_gb: 16
-  gpu_count: 1
-  system_ram_gb: 64    # edit to match
-  storage_path: "/mnt/projects"
-  storage_free_gb: 3400
+  gpu_model: "YOUR_GPU"          # e.g. "NVIDIA RTX 5080"; "none" if CPU-only
+  gpu_memory_gb: 0
+  gpu_count: 0
+  system_ram_gb: 0
+  storage_path: "~/projects"     # volume experiment artifacts land on
+  storage_free_gb: 0
