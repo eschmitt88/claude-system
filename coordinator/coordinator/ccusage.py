@@ -74,57 +74,62 @@ def _estimate_cost(counts: dict, models: list) -> Optional[float]:
         + counts.get("cacheCreationInputTokens", 0) * rates["cache_creation"]
     ) / 1_000_000
 
-# 5h Max-20x ceiling — known to be poorly calibrated because ccusage's
-# block window does not align with claude.ai's "current session" window
-# (ccusage rounds the block start to top-of-hour; Anthropic anchors to
-# first message of session, which can sit anywhere in the hour). At the
-# 2026-05-22 data point claude.ai showed 3% used while ccusage's active
-# block was at 27.7M tokens, which implies a ~923M ceiling — but a
-# meaningful fraction of those tokens fell in a *previous* claude.ai
-# session whose tail bled into ccusage's current block. The 2026-05-13
-# data point (3% at 5.53M) implied ~184M. Until we can identify the true
-# session boundary, this number is a rough lower bound; the displayed
-# 5h % can underestimate by ~2-3x in practice.
-MAX_20X_5H_TOKEN_LIMIT = 184_000_000
+# ---------------------------------------------------------------------------
+# Plan-quota calibration.
+#
+# Anthropic doesn't publish plan ceilings, so the limits below are
+# *calibrated*, not known. The weekly quota is evidently cost-weighted
+# (token-implied ceilings move with the model mix's $/token), so USD is
+# the primary basis for the weekly %; the token constant is only a
+# fallback for windows where ccusage can't price any of the blocks.
+#
+# To calibrate: read the displayed usage % at claude.ai/settings/usage,
+# then
+#     limit_usd = window_cost_usd / (claude_ai_pct / 100)
+# and set QUOTA_WEEKLY_COST_LIMIT_USD in ~/.claude/.env (re-run
+# ./install.sh so services pick it up). Check early in EVERY weekly
+# window, not just when the number looks wrong — two known drift sources:
+#   - cache-read-heavy windows inflate the USD "constant" (Anthropic
+#     appears to weight cache reads cheaper than ccusage prices them),
+#     so the ceiling is mix-stable only within a similar cache profile;
+#   - Anthropic occasionally grants temporary bonus quota; record those
+#     in the weekly-limit override file (below) rather than moving the
+#     base calibration.
+#
+# The 5h limit is known to be poorly calibrated: ccusage's block window
+# does not align with claude.ai's session window (ccusage rounds the
+# block start to top-of-hour; Anthropic anchors to the first message of
+# the session), so the displayed 5h % can underestimate by ~2-3x. Treat
+# it as a rough lower bound.
+#
+# Defaults are one Max-20x subscription's calibration as of 2026-08;
+# override any of them in ~/.claude/.env for your plan.
 
-# Weekly Max-20x ceiling, cost-anchored. Reset-anchored calibration
-# history (user-reported claude.ai % vs summed window usage):
-#   2026-05-22: 231.0M tok           = 10% → ~2.31B tok/week (Opus-era mix)
-#   2026-07-15: 513.08M tok, $200.39 = 53% → ~968M tok/week, ~$378/week
-#   2026-07-23: 703.44M tok, $363.19 = 35% → ~$1038/week implied. User
-#     reports a temporary +50% bonus this week; even so the bonus-free
-#     implied ceiling would be ~$692 — ~1.8x the 07-15 calibration.
-#     Handled via the weekly-limit override file (below), expired at the
-#     07-27 reset.
-#   2026-08-02: 1063.17M tok, $880.31 = 46% → ~$1914/week, ~2.31B tok/week
-#     implied. Initially read as a base recalibration; corrected 08-03 when
-#     the user learned the +50% Claude Code weekly bonus (first seen week of
-#     07-20) was in fact still active and is extended through 2026-08-19.
-#     So $1914 is the *bonused* ceiling and the base is ~$1276 (= 1914/1.5);
-#     $1914 lives in the override file while the bonus runs. Bonus-free
-#     implied bases now run 378 → ~692 → ~1276 across three windows. The
-#     08-02 window's mix was ~97% cache-read tokens; the likely explanation
-#     for the residual drift is that Anthropic's quota weights cache reads
-#     far cheaper than ccusage prices them, so our USD "constant" inflates
-#     as the cache-read share grows. The USD ceiling is therefore mix-stable
-#     only within a similar cache profile.
-# Anthropic's quota is evidently **cost-weighted** (the 05-22 → 07-15
-# token-implied ceiling moved ~2.4x, consistent with Fable 5 costing 2x
-# Opus per token), so USD remains the primary basis for the weekly %. The
-# token constant below is the current mix's bonus-free equivalent, kept
-# only as a fallback for windows where ccusage can't price the blocks
-# (all-unknown-model mix). Recalibrate both whenever the dashboard % drifts
-# from claude.ai's displayed % — and given the drift above, check early in
-# every window, not just when it looks wrong.
-MAX_20X_WEEKLY_COST_LIMIT_USD = 1276.0
-MAX_20X_WEEKLY_TOKEN_LIMIT = 1_541_000_000
 
-# Anthropic resets the weekly quota at Mon 17:00 in the user's local TZ
-# (displayed on claude.ai/settings/usage). System runs in UTC; if the
-# user's claude.ai browser sits in a different TZ, the boundary will be
-# off by their offset. Keep this aligned with the user's display.
-_WEEKLY_RESET_HOUR_LOCAL = 17
-_WEEKLY_RESET_WEEKDAY = 0  # Monday
+def _env_num(name: str, cast, default):
+    raw = os.environ.get(name)
+    if raw:
+        try:
+            return cast(raw)
+        except ValueError:
+            pass
+    return default
+
+
+# 5h ceiling, tokens (rough lower bound — see above).
+QUOTA_5H_TOKEN_LIMIT = _env_num("QUOTA_5H_TOKEN_LIMIT", int, 184_000_000)
+
+# Weekly ceiling: USD (primary) and its token equivalent for the same
+# model mix (fallback when no block in the window could be priced).
+QUOTA_WEEKLY_COST_LIMIT_USD = _env_num("QUOTA_WEEKLY_COST_LIMIT_USD", float, 1276.0)
+QUOTA_WEEKLY_TOKEN_LIMIT = _env_num("QUOTA_WEEKLY_TOKEN_LIMIT", int, 1_541_000_000)
+
+# Anthropic resets the weekly quota at a fixed local weekday + hour
+# (displayed on claude.ai/settings/usage). Keep these aligned with what
+# your claude.ai shows; if this machine runs in a different TZ than your
+# browser, the boundary will be off by that offset.
+_WEEKLY_RESET_HOUR_LOCAL = _env_num("QUOTA_WEEKLY_RESET_HOUR", int, 17)
+_WEEKLY_RESET_WEEKDAY = _env_num("QUOTA_WEEKLY_RESET_WEEKDAY", int, 0)  # 0 = Monday
 
 # Anthropic occasionally issues out-of-band quota resets (goodwill /
 # incident credits) that zero the counter between scheduled boundaries
@@ -238,7 +243,7 @@ def active_block() -> Optional[dict]:
     pct_hist = None
     if historical_max and historical_max > 0:
         pct_hist = 100.0 * total / historical_max
-    pct_max20x = 100.0 * total / MAX_20X_5H_TOKEN_LIMIT
+    pct_max20x = 100.0 * total / QUOTA_5H_TOKEN_LIMIT
 
     # Time remaining: prefer block endTime − now over actualEndTime.
     remaining_min = None
@@ -272,7 +277,7 @@ def active_block() -> Optional[dict]:
         "projection_cost": proj.get("totalCost"),
         "historical_max_tokens": historical_max,
         "pct_vs_historical_max": pct_hist,
-        "max20x_limit_tokens": MAX_20X_5H_TOKEN_LIMIT,
+        "max20x_limit_tokens": QUOTA_5H_TOKEN_LIMIT,
         "pct_vs_max20x_limit": pct_max20x,
     }
 
@@ -364,9 +369,9 @@ def weekly_anchored() -> Optional[dict]:
     # (agency pacing, suggested_session_tokens) consistent with the %.
     # Unpriced windows fall back to the static token calibration.
     override = _weekly_limit_override()
-    cost_limit = override if override is not None else MAX_20X_WEEKLY_COST_LIMIT_USD
+    cost_limit = override if override is not None else QUOTA_WEEKLY_COST_LIMIT_USD
     # Scale the token fallback by the same factor so both bases agree.
-    token_limit = int(MAX_20X_WEEKLY_TOKEN_LIMIT * cost_limit / MAX_20X_WEEKLY_COST_LIMIT_USD)
+    token_limit = int(QUOTA_WEEKLY_TOKEN_LIMIT * cost_limit / QUOTA_WEEKLY_COST_LIMIT_USD)
     if cost > 0 and total > 0:
         pct = 100.0 * cost / cost_limit
         effective_token_limit = int(total * cost_limit / cost)
