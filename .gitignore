@@ -23,6 +23,13 @@ dist/
 # contains real hostnames/IPs, never committed
 registry/services.yaml
 
+# Scheduled-run cron wrappers live in ~/.claude/schedule/ and are NEVER
+# tracked: this repo is public and they carry notification topics (the topic
+# name is the credential), absolute paths, private project names, and
+# bypassPermissions invocations. Guard against an accidental copy-in.
+# Reusable, secret-free logic belongs in claude/lib/ instead. See README.
+claude/schedule/
+
 # OS / editor
 .DS_Store
 *.swp

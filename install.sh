@@ -50,7 +50,11 @@ echo "=> Linking framework directories into $CLAUDE_DIR/"
 # project-CLAUDE.md @imports so they cost context only where they apply
 # (instruction-ablation-program, phase 5). Skills reference them by
 # their stable ~/claude-system/claude/rules/ paths.
-for sub in skills hooks templates; do
+# lib/ holds secret-free shell helpers that the UNTRACKED cron wrappers in
+# ~/.claude/schedule/ source. Those wrappers stay out of this public repo
+# (notification topics, private paths — see README); linking lib/ keeps the
+# reusable logic version-controlled anyway.
+for sub in skills hooks templates lib; do
   link "$REPO_ROOT/claude/$sub" "$CLAUDE_DIR/$sub"
 done
 # Clean up the pre-phase-5 global rules link if present.
