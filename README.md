@@ -28,6 +28,33 @@ Runtime state — `~/.claude/sessions/`, `~/.claude/cache/`,
 `~/.claude/.env`, `~/.claude/state.db`, `~/projects/*` — is **not**
 tracked by this repo.
 
+### Deliberately absent: `~/.claude/schedule/`
+
+The cron wrappers that drive scheduled agent runs live in
+`~/.claude/schedule/` and are **intentionally not tracked here**, because
+**this repository is public** and those scripts are machine-specific by
+nature. They accumulate:
+
+- **Push-notification topics.** On a public notification service the topic
+  name *is* the credential — anyone who learns it can read the channel and
+  publish to it. Committing one here would hand it over.
+- **Absolute paths and project names**, including private repos, which the
+  redaction rule for public repos forbids.
+- **`--permission-mode bypassPermissions` invocations** — working recipes for
+  unattended autonomous runs, tied to a specific host's layout.
+
+`install.sh` therefore links `skills`, `hooks`, and `templates`, but never
+`schedule`. `.gitignore` also carries a `claude/schedule/` guard so that
+copying the directory into the repo cannot silently commit it.
+
+**Consequence to be aware of:** those scripts have no version history and no
+backup. Keep them short, and put any reusable logic in `claude/lib/` (tracked,
+secret-free) rather than in the wrappers themselves — see below.
+
+| Path | Purpose |
+|---|---|
+| `claude/lib/` | Secret-free shell helpers the untracked cron wrappers source. Tracked so the logic survives even though the wrappers don't. |
+
 ## Setup
 
 ### Prerequisites
