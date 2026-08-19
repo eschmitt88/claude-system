@@ -530,10 +530,29 @@ async function vDecision(path) {
 }
 
 /* ---- shared bits ---- */
+// Frontmatter values carry cross-references whose [[ ]] brackets strip()
+// removed: explicit paths ("concepts/x", "literature/papers/y") always
+// link; bare slugs (citekeys, experiment folders) link only when the
+// file tree confirms the target exists.
+function fmHref(v) {
+  const t = String(v).trim().replace(/\.md$/, "");
+  if (!t || /^https?:/.test(t) || /\s/.test(t)) return null;
+  if (/^(concepts|literature|mocs|experiments)\//.test(t)) return wikiHref(t);
+  if (!/^[A-Za-z0-9][\w.-]*$/.test(t)) return null;
+  if (state.paths.some(p => p.startsWith(`experiments/${t}/`))) return `#/experiment/${t}`;
+  if (state.paths.includes(`concepts/${t}.md`)) return `#/concept/${t}`;
+  if (state.paths.includes(`mocs/${t}.md`)) return `#/moc/${t}`;
+  const note = state.paths.find(p => p.startsWith("literature/") && p.endsWith(`/${t}.md`));
+  return note ? `#/note/${note}` : null;
+}
 function fmBlock(fm, keys) {
+  const one = x => {
+    const h = fmHref(x);
+    return h ? `<a class="wiki" href="${h}">${esc(String(x))}</a>` : inline(esc(String(x)));
+  };
   const rows = keys.filter(k => fm[k] && (!Array.isArray(fm[k]) || fm[k].length)).map(k => {
     const v = fm[k];
-    const val = Array.isArray(v) ? v.map(x => inline(esc(String(x)))).join(", ") : inline(esc(String(v)));
+    const val = Array.isArray(v) ? v.map(one).join(", ") : one(v);
     return `<dt>${k}</dt><dd>${val}</dd>`;
   }).join("");
   return rows ? `<div class="fm"><dl>${rows}</dl></div>` : "";
