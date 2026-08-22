@@ -87,6 +87,7 @@
     <a class="lnk" href="#/literature" data-v="literature"><span>Literature</span><span class="ct" id="ctLit">·</span></a>
     <a class="lnk" href="#/mocs" data-v="mocs"><span>Maps of Content</span><span class="ct" id="ctMoc">·</span></a>
     <a class="lnk" href="#/candidates" data-v="candidates"><span>Candidates</span><span class="ct" id="ctCan">·</span></a>
+    <a class="lnk" href="#/docs" data-v="docs"><span>Docs</span><span class="ct" id="ctDoc">·</span></a>
     <a class="lnk" href="#/decisions" data-v="decisions"><span>Decisions</span><span class="ct" id="ctDec">·</span></a>
     <a class="ghlink mono" id="ghLink" target="_blank" rel="noopener">↗ view on GitHub</a>
   </nav>
@@ -99,7 +100,7 @@
    Convention-driven static viewer for a research repo.
    Drop this file at docs/index.html in any repo following the framework
    layout (literature/ concepts/ mocs/ experiments/ raw/_candidates/
-   docs/decisions/) and enable GitHub Pages from /docs. Zero build:
+   docs/*.md docs/decisions/) and enable GitHub Pages from /docs. Zero build:
    it auto-detects owner/repo from the Pages URL, reads the live file tree
    in ONE GitHub API call, and pulls file bodies from the raw CDN.
    Override for local testing with ?owner=&repo=&branch=.
@@ -269,8 +270,12 @@ function buckets() {
   const moc = P.filter(p => /^mocs\/[^/]+\.md$/.test(p) && notUnderscore(p));
   const can = P.filter(p => p.startsWith("raw/_candidates/") && isMd(p) && notUnderscore(p) && p.split("/").length === 3);
   const dec = P.filter(p => p.startsWith("docs/decisions/") && isMd(p) && notUnderscore(p));
+  // Top-level docs/*.md — research plan, method write-ups, demos. The narrative
+  // that ties the graph together; without this tab the site shows evidence
+  // with no story.
+  const doc = P.filter(p => /^docs\/[^/]+\.md$/.test(p) && notUnderscore(p));
   const exps = [...new Set(P.map(p => (p.match(expDir) || [])[1]).filter(Boolean))].sort().reverse();
-  return { lit, con, moc, can, dec, exps };
+  return { lit, con, moc, can, dec, doc, exps };
 }
 
 /* ---- small helpers ---- */
@@ -522,6 +527,24 @@ async function vDecisions() {
     ${items.map(it => `<div class="card" style="margin:8px 0"><a href="#/decision/${encodeURIComponent(it.path)}">
       <div class="t">${esc(slug(it.path))}</div></a></div>`).join("") || `<p class="empty">No ADRs yet.</p>`}`;
 }
+async function vDocs() {
+  setActive("docs");
+  const b = buckets();
+  const items = await loadMany(b.doc);
+  const title = it => it.fm.title || it.fm.name || slug(it.path);
+  const sub = it => [it.fm.kind, it.fm.status, it.fm.updated || it.fm.added].filter(Boolean).join(" · ");
+  view.innerHTML = `<h1>Docs</h1><p class="lead">${items.length} top-level document(s) under <code>docs/</code> — plans, methods, write-ups.</p>
+    ${items.map(it => `<div class="card" style="margin:8px 0"><a href="#/doc/${encodeURIComponent(it.path)}">
+      <div class="t">${esc(title(it))}</div>${sub(it) ? `<div class="m mono">${esc(sub(it))}</div>` : ""}</a></div>`).join("")
+      || `<p class="empty">No docs yet — write a research plan or method note under docs/.</p>`}`;
+}
+async function vDoc(path) {
+  setActive("docs");
+  const text = await raw(path);
+  if (!text) return notFound(path);
+  const fm = parseFM(text);
+  view.innerHTML = `<div class="crumb"><a href="#/docs">Docs</a> / ${esc(fm.fm.title || fm.fm.name || slug(path))}</div><div class="doc">${md(fm.body)}</div>`;
+}
 async function vDecision(path) {
   setActive("decisions");
   const text = await raw(path);
@@ -576,6 +599,8 @@ const routes = [
   [/^\/moc\/(.+)$/, m => vMoc(decodeURIComponent(m[1]))],
   [/^\/candidates$/, vCandidates],
   [/^\/candidate\/(.+)$/, m => vCandidate(decodeURIComponent(m[1]))],
+  [/^\/docs$/, vDocs],
+  [/^\/doc\/(.+)$/, m => vDoc(decodeURIComponent(m[1]))],
   [/^\/decisions$/, vDecisions],
   [/^\/decision\/(.+)$/, m => vDecision(decodeURIComponent(m[1]))],
 ];
@@ -607,6 +632,7 @@ async function boot() {
     $("#ctExp").textContent = b.exps.length; $("#ctCon").textContent = b.con.length;
     $("#ctLit").textContent = b.lit.length; $("#ctMoc").textContent = b.moc.length;
     $("#ctCan").textContent = b.can.length; $("#ctDec").textContent = b.dec.length;
+    $("#ctDoc").textContent = b.doc.length;
     document.title = `${CONFIG.repo} · research`;
     window.addEventListener("hashchange", route);
     await route();
