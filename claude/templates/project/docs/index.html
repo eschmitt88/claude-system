@@ -100,7 +100,7 @@
    Convention-driven static viewer for a research repo.
    Drop this file at docs/index.html in any repo following the framework
    layout (literature/ concepts/ mocs/ experiments/ raw/_candidates/
-   docs/*.md docs/decisions/) and enable GitHub Pages from /docs. Zero build:
+   docs/**/*.md docs/decisions/) and enable GitHub Pages from /docs. Zero build:
    it auto-detects owner/repo from the Pages URL, reads the live file tree
    in ONE GitHub API call, and pulls file bodies from the raw CDN.
    Override for local testing with ?owner=&repo=&branch=.
@@ -153,7 +153,7 @@ function parseFM(text) {
     const v = m[2].trim();
     if (v === "") out.fm[key] = out.fm[key] || [];
     else if (/^(null|~|Null|NULL)$/.test(v)) { /* YAML null — leave the field absent so it doesn't render as a "null" value/link */ }
-    else if (/^\[.*\]$/.test(v)) out.fm[key] = v.slice(1, -1).split(",").map(s => strip(s.trim())).filter(Boolean);
+    else if (v.startsWith("[")) { const close = v.lastIndexOf("]"); out.fm[key] = (close > 0 ? v.slice(1, close) : v.slice(1)).split(",").map(s => strip(s.trim())).filter(Boolean); }
     else out.fm[key] = strip(v);
   }
   return out;
@@ -270,10 +270,11 @@ function buckets() {
   const moc = P.filter(p => /^mocs\/[^/]+\.md$/.test(p) && notUnderscore(p));
   const can = P.filter(p => p.startsWith("raw/_candidates/") && isMd(p) && notUnderscore(p) && p.split("/").length === 3);
   const dec = P.filter(p => p.startsWith("docs/decisions/") && isMd(p) && notUnderscore(p));
-  // Top-level docs/*.md — research plan, method write-ups, demos. The narrative
-  // that ties the graph together; without this tab the site shows evidence
-  // with no story.
-  const doc = P.filter(p => /^docs\/[^/]+\.md$/.test(p) && notUnderscore(p));
+  // docs/**/*.md — research plans, method write-ups, reports, demos (any
+  // subfolder except decisions/ and system-proposals/, which have their own
+  // views). The narrative that ties the graph together; without this tab the
+  // site shows evidence with no story.
+  const doc = P.filter(p => /^docs\/.+\.md$/.test(p) && !/^docs\/(decisions|system-proposals)\//.test(p) && notUnderscore(p));
   const exps = [...new Set(P.map(p => (p.match(expDir) || [])[1]).filter(Boolean))].sort().reverse();
   return { lit, con, moc, can, dec, doc, exps };
 }
@@ -532,8 +533,8 @@ async function vDocs() {
   const b = buckets();
   const items = await loadMany(b.doc);
   const title = it => it.fm.title || it.fm.name || slug(it.path);
-  const sub = it => [it.fm.kind, it.fm.status, it.fm.updated || it.fm.added].filter(Boolean).join(" · ");
-  view.innerHTML = `<h1>Docs</h1><p class="lead">${items.length} top-level document(s) under <code>docs/</code> — plans, methods, write-ups.</p>
+  const sub = it => [it.path.split("/").length > 2 ? it.path.slice(5) : "", it.fm.kind, it.fm.status, it.fm.updated || it.fm.added].filter(Boolean).join(" · ");
+  view.innerHTML = `<h1>Docs</h1><p class="lead">${items.length} document(s) under <code>docs/</code> — plans, methods, reports, write-ups.</p>
     ${items.map(it => `<div class="card" style="margin:8px 0"><a href="#/doc/${encodeURIComponent(it.path)}">
       <div class="t">${esc(title(it))}</div>${sub(it) ? `<div class="m mono">${esc(sub(it))}</div>` : ""}</a></div>`).join("")
       || `<p class="empty">No docs yet — write a research plan or method note under docs/.</p>`}`;
