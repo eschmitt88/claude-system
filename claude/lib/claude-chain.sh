@@ -37,7 +37,13 @@ claude_chain() {
     local before=0
     [ -f "$log" ] && before=$(wc -c < "$log")
 
-    if claude "${args[@]}" "$@" >> "$log" 2>&1; then
+    # Filter the CLI's SessionEnd-hook teardown notice ("... failed: Hook
+    # cancelled") before it lands in what is usually a *tracked* log — it
+    # leaked into four repos' _meta/*.log and was hand-reverted 7+ times.
+    # PIPESTATUS[0] preserves claude's own exit code through the filter.
+    local rc=0
+    { claude "${args[@]}" "$@" 2>&1 | grep -v 'failed: Hook cancelled' >> "$log"; rc=${PIPESTATUS[0]}; } || true
+    if [ "$rc" -eq 0 ]; then
       if ! tail -c "+$((before + 1))" "$log" \
            | grep -qiE "reached your .{0,40}limit|usage limit|out of (usage )?credits"; then
         [ "$i" -eq 0 ] || echo "[claude_chain] fell back to '$m' (primary '${models[0]}' unavailable)" >> "$log"
