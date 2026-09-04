@@ -73,6 +73,14 @@ restraint is the point: the value is in real structure, not MoC count.
 
 ## Notes
 
+- **Decline logging is capped.** A decline against a concept set that is
+  unchanged since the last logged decline gets ONE `_meta/log.md` line —
+  `YYYY-MM-DD promote-moc declined (graph unchanged since <sha>, N/N
+  concepts mapped)` — and no commit of its own. Write analysis prose only
+  when the concept set actually changed since the last decline; do not
+  re-derive or restate coverage proofs already recorded. (Context: 13
+  consecutive daily declines in agentic-research each re-proved the same
+  theorem in a 200+ word essay.)
 - Read-then-write: synthesize from the actual concept files, not memory.
   Every concept in the `concepts:` list must exist.
 - Promotion is reversible (`git revert`); subsumption mistakes are not

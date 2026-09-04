@@ -7,7 +7,10 @@
 # and end time.
 set -euo pipefail
 
-payload="$(cat || true)"
+# Bounded stdin read: if the harness tears down without delivering/closing
+# the payload pipe, a bare `cat` blocks until the hook is cancelled ("Hook
+# cancelled" in the CLI output). 2s is orders of magnitude above normal.
+payload="$(timeout 2 cat || true)"
 cwd="$(printf '%s' "$payload" | jq -r '.cwd // empty' 2>/dev/null || true)"
 session_id="$(printf '%s' "$payload" | jq -r '.session_id // empty' 2>/dev/null || true)"
 cwd="${cwd:-$PWD}"
