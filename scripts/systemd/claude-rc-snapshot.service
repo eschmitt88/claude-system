@@ -1,0 +1,6 @@
+[Unit]
+Description=Snapshot live Claude Code Remote Control sessions for restore-on-boot
+
+[Service]
+Type=oneshot
+ExecStart=/home/eschmitt/claude-system/scripts/claude_rc_restore.py snapshot

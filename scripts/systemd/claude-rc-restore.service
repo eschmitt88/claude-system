@@ -1,0 +1,19 @@
+[Unit]
+Description=Restore Claude Code Remote Control sessions into tmux after boot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=PATH=/home/eschmitt/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HOME=/home/eschmitt
+# give the relay / DNS a moment after network-online
+ExecStartPre=/bin/sleep 20
+ExecStart=/usr/bin/python3 -u /home/eschmitt/claude-system/scripts/claude_rc_restore.py restore
+# capture the final live set at shutdown, before the cgroup (tmux + claude) is killed
+ExecStop=/home/eschmitt/claude-system/scripts/claude_rc_restore.py snapshot
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target
