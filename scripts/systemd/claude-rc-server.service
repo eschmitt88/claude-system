@@ -1,0 +1,21 @@
+[Unit]
+Description=Claude Code Remote Control server (lets the phone/web create new sessions on this machine)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/mnt/projects
+Environment=PATH=/home/eschmitt/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=HOME=/home/eschmitt
+# same-dir spawn: new sessions from the phone start in /mnt/projects like the
+# tmux ones. The pre-created session is a spare to type into; leaving it on
+# means a restart within ~4h brings back every session the server was serving.
+ExecStart=/home/eschmitt/.local/bin/claude remote-control --name "aiserver inbox" --spawn same-dir --permission-mode auto
+# server mode exits on its own after ~10 min without network; just come back
+Restart=always
+RestartSec=30
+StandardInput=null
+
+[Install]
+WantedBy=default.target
