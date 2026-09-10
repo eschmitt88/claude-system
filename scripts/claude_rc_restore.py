@@ -84,7 +84,9 @@ def cmd_snapshot(args):
     now = time.time()
     seen = 0
     for sid, d in live_sessions().items():
-        if not d.get("bridgeSessionId") and not args.all:
+        if not args.all and (not d.get("bridgeSessionId") or d.get("entrypoint") != "cli"):
+            # sessions served by `claude remote-control` (entrypoint sdk-cli) are the
+            # server's to bring back; only terminal-launched sessions go to tmux
             continue
         seen += 1
         entry = sessions.setdefault(sid, {})
@@ -177,7 +179,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("snapshot"); s.add_argument("--prune-minutes", type=float, default=30)
-    s.add_argument("--all", action="store_true", help="include interactive sessions without Remote Control")
+    s.add_argument("--all", action="store_true", help="include sessions without Remote Control and server-mode sessions")
     s.set_defaults(fn=cmd_snapshot)
     r = sub.add_parser("restore"); r.add_argument("--dry-run", action="store_true")
     r.add_argument("--stagger", type=float, default=3, help="seconds between launches")
