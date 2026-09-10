@@ -114,7 +114,8 @@ fi
 USER_UNIT_DIR="$HOME/.config/systemd/user"
 mkdir -p "$USER_UNIT_DIR"
 
-for unit in claude-dashboard.service claude-hw-poller.service claude-hw-poller.timer; do
+for unit in claude-dashboard.service claude-hw-poller.service claude-hw-poller.timer \
+            claude-rc-snapshot.service claude-rc-snapshot.timer claude-rc-restore.service; do
   src="$REPO_ROOT/scripts/systemd/$unit"
   if [ -f "$src" ]; then
     # Substitute REPO_ROOT + resolved config into the unit file.
@@ -133,7 +134,7 @@ done
 
 if command -v systemctl >/dev/null 2>&1; then
   systemctl --user daemon-reload || true
-  for unit in claude-hw-poller.timer claude-dashboard.service; do
+  for unit in claude-hw-poller.timer claude-dashboard.service claude-rc-snapshot.timer claude-rc-restore.service; do
     if [ -f "$USER_UNIT_DIR/$unit" ]; then
       systemctl --user enable --now "$unit" 2>/dev/null || echo "  (systemctl enable $unit failed; bring it up by hand later)"
     fi
