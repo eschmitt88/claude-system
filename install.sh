@@ -101,6 +101,9 @@ if command -v uv >/dev/null 2>&1; then
   # script, not `python -m` — the latter puts the repo root on sys.path,
   # where the bare ./coordinator dir shadows the installed package.
   "$REPO_ROOT/coordinator/.venv/bin/claude-coordinator-init" || true
+  # Job ledger: discover timers/crontab and back-fill 14 days of runs from
+  # the journal so forecasts have footprints on day one. Idempotent.
+  "$REPO_ROOT/coordinator/.venv/bin/claude-coordinator-jobs" sync --backfill 14 2>/dev/null || true
 fi
 
 # Dashboard venv

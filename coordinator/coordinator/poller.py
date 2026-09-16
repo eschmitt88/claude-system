@@ -1,7 +1,7 @@
 """Hardware poller. One-shot sampling; run on a systemd timer at 30s cadence.
 
-Writes one row to hardware_samples and prunes rows older than 7 days on
-every invocation. NVIDIA GPU sampling uses pynvml; missing GPU is
+Writes one row to hardware_samples, runs the job-ledger tick (see
+jobs.py), and prunes rows older than 30 days on every invocation. NVIDIA GPU sampling uses pynvml; missing GPU is
 tolerated (fields come back as None).
 """
 from __future__ import annotations
@@ -13,6 +13,7 @@ import psutil
 
 from .db import prune_hardware_samples
 from .writers import insert_hardware_sample
+from . import jobs
 
 
 def _sample_gpu() -> dict:
@@ -72,8 +73,11 @@ def sample_once() -> dict:
 def main() -> int:
     sample = sample_once()
     insert_hardware_sample(sample)
-    # Idempotent pruning; cheap.
-    prune_hardware_samples(keep_days=7)
+    # Job ledger: inventory refresh, per-unit cgroup/GPU attribution for
+    # running scheduled jobs, periodic journal catch-up. Never raises.
+    jobs.tick(sample)
+    # Idempotent pruning; cheap. 30 days feeds job-footprint learning.
+    prune_hardware_samples(keep_days=30)
     return 0
 
 

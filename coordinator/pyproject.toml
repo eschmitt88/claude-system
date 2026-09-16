@@ -1,13 +1,14 @@
 [project]
 name = "coordinator"
 version = "0.1.0"
-description = "Resource coordinator for the claude-system framework (sqlite state + hardware poller + agency verdict)."
+description = "Resource coordinator for the claude-system framework (sqlite state + hardware poller + job ledger + agency verdict)."
 requires-python = ">=3.12"
 dependencies = [
   "psutil>=5.9",
   "nvidia-ml-py>=12",
   "portalocker>=3",
   "pyyaml>=6",
+  "croniter>=2",
 ]
 
 [project.scripts]
@@ -15,6 +16,7 @@ claude-coordinator-poll = "coordinator.poller:main"
 claude-coordinator-init = "coordinator.init_db:main"
 claude-coordinator-status = "coordinator.status:main"
 claude-coordinator-agency = "coordinator.agency_cli:main"
+claude-coordinator-jobs = "coordinator.jobs_cli:main"
 
 [build-system]
 requires = ["setuptools>=68"]

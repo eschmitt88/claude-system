@@ -42,8 +42,14 @@ skills):
 - **Hardware (latest sample)** — CPU / RAM / disk on `/mnt/projects` /
   GPU utilization + VRAM + temperature + power. Sampled every 30s by
   the `claude-hw-poller.timer` systemd unit.
+- **Scheduled jobs** — the box-schedule brief from the job ledger:
+  tracked jobs running now (with footprint and expected end), heavy
+  jobs due in the next 12h, when the GPU is next claimed, and any job
+  failing repeatedly. `/jobs` has the full inventory, forecast and
+  window search.
 - **Agency verdict** — GO/SLOW/HOLD with reasons and a suggested
-  session token budget (drives `agency: max` repos).
+  session token budget (drives `agency: max` repos). Includes a
+  schedule reason when a GPU job is imminent (≤45 min).
 
 ## ccusage dependency
 
