@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Jobs</h1>
+<p class="subtitle">Recurring jobs on this box (systemd timers + crontab), their learned footprints, and the next {{ d.hours|int }}h forecast. Times UTC. Source: <code>claude-coordinator-jobs</code>; nothing here is registered by hand.</p>
+
+{% if d.health %}
+<div class="jobs-alert">
+  {% for h in d.health %}<div><strong>{{ h.unit }}</strong> {{ h.issue }} (last {{ h.last_run }})</div>{% endfor %}
+</div>
+{% endif %}
+
+<div class="jobs-cap">
+  {% set c = d.capacity %}
+  {% if c.vram_total_gb %}<span class="pip"><span class="label">VRAM</span><span class="v">{{ '%.1f'|format(c.vram_used_gb) }} / {{ '%.0f'|format(c.vram_total_gb) }} G</span></span>{% endif %}
+  <span class="pip"><span class="label">RAM</span><span class="v">{{ '%.0f'|format(c.ram_used_gb or 0) }} / {{ '%.0f'|format(c.ram_total_gb or 0) }} G</span></span>
+  <span class="pip"><span class="label">cores</span><span class="v">{{ c.cores_total }}</span></span>
+  <span class="pip {{ 'good' if not d.running else '' }}"><span class="label">running</span><span class="v">{{ d.running|length }}</span></span>
+  <span class="pip"><span class="label">GPU quiet until</span><span class="v">{% if d.gpu_quiet_until %}{{ d.gpu_quiet_until.strftime('%a %H:%M') }}{% else %}no GPU job in 48h{% endif %}</span></span>
+</div>
+
+<h2>Timeline · next {{ d.hours|int }}h</h2>
+<div class="tl">
+  <div class="tl-axis">
+    {% for t in d.ticks %}<span class="tl-tick" style="left: {{ '%.2f'|format(t.left) }}%">{{ t.label }}</span>{% endfor %}
+  </div>
+  {% for lane in d.lanes %}
+  <div class="tl-row">
+    <div class="tl-name mono" title="{{ lane.unit }}">{{ lane.unit.replace('.service','') }}</div>
+    <div class="tl-track">
+      {% for b in lane.bars %}
+      <span class="tl-bar k-{{ b.klass.split('+')[0] }} {{ b.kind }}" style="left: {{ '%.2f'|format(b.left) }}%; width: {{ '%.2f'|format(b.width) }}%" title="{{ b.label }}"></span>
+      {% endfor %}
+    </div>
+  </div>
+  {% else %}
+  <p class="hub-foot">Nothing heavy scheduled in this window.</p>
+  {% endfor %}
+  <div class="tl-legend"><span class="tl-bar k-gpu"></span> GPU <span class="tl-bar k-cpu"></span> CPU-heavy <span class="tl-bar k-ram"></span> RAM-heavy <span class="tl-bar k-long-light"></span> long, light <span class="tl-bar k-gpu running"></span> running now</div>
+</div>
+
+<h2>Running now</h2>
+{% if d.running %}
+<table class="ports-table">
+  <thead><tr><th>Unit</th><th>Since</th><th>Expected end</th><th>Footprint (learned / observed)</th></tr></thead>
+  <tbody>{% for r in d.running %}
+  <tr><td class="mono">{{ r.unit }}</td><td>{{ r.start }}</td><td>{{ r.end }}</td><td>{{ r.fp_text }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% else %}<p class="hub-foot">No tracked job is running.</p>{% endif %}
+{% if d.gpu_procs %}
+<p class="hub-foot">GPU memory holders: {% for g in d.gpu_procs|sort(attribute='vram_mb', reverse=true) %}<span class="mono">{{ g.unit or g.cgroup or '?' }}</span> {{ '%.0f'|format(g.vram_mb) }} MB{% if not loop.last %} · {% endif %}{% endfor %}</p>
+{% endif %}
+
+<h2>Inventory &amp; learned footprints</h2>
+<table class="ports-table">
+  <thead><tr><th>Unit</th><th>Scope</th><th>Schedule</th><th>Next</th><th>p90 duration</th><th>Footprint</th><th>Runs</th><th>Reliability</th></tr></thead>
+  <tbody>
+  {% for r in d.inventory %}
+  <tr class="{{ 'muted' if r.footprint.klass == 'light' else '' }}">
+    <td class="mono">{{ r.unit }}{% if r.project %}<div class="port-note">{{ r.project }}</div>{% endif %}</td>
+    <td>{{ r.scope }}</td>
+    <td class="mono">{{ r.schedule or '—' }}{% if r.randomized_delay_s %} <span class="port-note">±{{ (r.randomized_delay_s // 60) }}m</span>{% endif %}</td>
+    <td>{{ (r.next_run or (r.next_runs[0] if r.next_runs else '—'))|replace('T',' ')|replace('Z','') }}</td>
+    <td>{% if r.footprint.duration_s %}{{ '%.0f'|format(r.footprint.duration_s / 60) }} min{% else %}—{% endif %}</td>
+    <td><span class="klass k-{{ r.footprint.klass.split('+')[0] }}">{{ r.footprint.klass }}</span> {{ r.fp_text }}</td>
+    <td>{{ r.n_runs }}</td>
+    <td>{% if r.fail_streak %}<span class="dot down"></span>{{ r.fail_streak }} failed in a row{% elif r.n_failed %}{{ r.n_failed }} failed / {{ r.n_runs }}{% elif r.n_runs %}<span class="dot up"></span>ok{% else %}—{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>Recent runs</h2>
+<table class="ports-table">
+  <thead><tr><th>Unit</th><th>Started</th><th>Duration</th><th>Result</th><th>CPU-s</th><th>RSS peak</th><th>VRAM</th><th>ΔRAM (box)</th><th>GPU %</th><th>src</th></tr></thead>
+  <tbody>
+  {% for r in d.recent %}
+  <tr>
+    <td class="mono">{{ r.unit }}</td>
+    <td>{{ r.started_at|replace('T',' ')|replace('Z','') }}</td>
+    <td>{% if r.duration_s %}{{ '%.0f'|format(r.duration_s / 60) }} min{% else %}—{% endif %}</td>
+    <td>{% if r.result == 'failed' %}<span class="dot down"></span>{% elif r.result == 'done' %}<span class="dot up"></span>{% endif %}{{ r.result }}</td>
+    <td>{{ '%.0f'|format(r.cpu_seconds or 0) }}</td>
+    <td>{{ '%.1f'|format(r.peak_rss_gb or 0) }} G</td>
+    <td>{{ '%.1f'|format(r.peak_vram_gb or r.est_vram_gb or 0) }} G</td>
+    <td>{{ '%.1f'|format(r.est_ram_gb if (r.est_ram_gb or 0) > 0 else 0) }} G</td>
+    <td>{{ '%.0f'|format(r.avg_gpu_util or 0) }}</td>
+    <td>{{ r.source }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<p class="hub-foot">Plan a run: <code>claude-coordinator-jobs window --gpu-gb 8 --hours 2</code>. Launch it attributed: <code>claude-coordinator-jobs run --name my-exp --gpu-gb 8 --hours 2 --log run.log -- python -u train.py</code>.</p>
+
+<style>
+.jobs-alert { border: 1px solid var(--bad); background: var(--bad-soft); color: var(--bad); border-radius: var(--r-md); padding: .6rem .9rem; margin: .6rem 0 1rem; font-size: .9rem; }
+.jobs-cap { display: flex; flex-wrap: wrap; gap: .5rem; margin: .4rem 0 1.2rem; }
+.jobs-cap .pip { border: 1px solid var(--border); border-radius: 999px; padding: .2rem .7rem; font-size: .82rem; display: inline-flex; gap: .4rem; }
+.jobs-cap .pip .label { color: var(--ink-3); } .jobs-cap .pip .v { font-family: var(--font-mono); }
+.tl { border: 1px solid var(--border); border-radius: var(--r-lg); padding: .8rem 1rem 1rem; background: var(--surface); margin-bottom: 1.4rem; }
+.tl-axis { position: relative; height: 1.2rem; margin-left: 190px; border-bottom: 1px solid var(--border); font-size: .72rem; color: var(--ink-3); }
+.tl-tick { position: absolute; transform: translateX(-50%); }
+.tl-row { display: flex; align-items: center; gap: .6rem; height: 1.5rem; }
+.tl-name { width: 180px; flex: none; font-size: .78rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.tl-track { position: relative; flex: 1; height: .95rem; background: var(--surface-2); border-radius: 4px; }
+.tl-bar { position: absolute; top: 0; height: 100%; border-radius: 3px; opacity: .85; }
+.tl-bar.k-gpu { background: var(--accent); } .tl-bar.k-cpu { background: var(--warn); } .tl-bar.k-ram { background: #7c3aed; }
+.tl-bar.k-long-light, .tl-bar.k-light, .tl-bar.k-unknown { background: var(--ink-4); }
+.tl-bar.running { outline: 2px solid var(--good); outline-offset: -2px; }
+.tl-legend { margin: .8rem 0 0 190px; font-size: .75rem; color: var(--ink-3); display: flex; gap: .5rem; align-items: center; }
+.tl-legend .tl-bar { position: static; display: inline-block; width: 1.4rem; height: .7rem; }
+.klass { font-family: var(--font-mono); font-size: .72rem; padding: .05rem .4rem; border-radius: 4px; background: var(--surface-3); margin-right: .3rem; }
+.klass.k-gpu { background: var(--accent-soft); color: var(--accent); }
+.klass.k-cpu { background: var(--warn-soft); color: var(--warn); }
+tr.muted td { color: var(--ink-3); }
+.ports-table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+.ports-table th, .ports-table td { text-align: left; padding: .4rem .55rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+.ports-table th { font-size: .74rem; text-transform: uppercase; letter-spacing: .03em; color: var(--ink-3); }
+.dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; margin-right: .35rem; vertical-align: middle; }
+.dot.up { background: #22c55e; } .dot.down { background: #ef4444; }
+.port-note { font-size: .74rem; color: var(--ink-3); }
+</style>
+{% endblock %}

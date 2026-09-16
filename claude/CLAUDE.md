@@ -102,6 +102,23 @@ they cost context only where they apply.
 - Worktrees go under `~/projects/research/<slug>/.worktrees/`, not
   alongside the main checkout.
 
+## Shared box — plan compute around scheduled jobs
+
+The machine runs a fleet of timer-driven jobs (retrains, harvests,
+monitors) with learned GPU/RAM/CPU footprints. Every session starts with
+a "Box schedule" notice; `/headroom` repeats it.
+
+- **Before a GPU or multi-core run longer than ~15 min**, ask for a
+  window: `claude-coordinator-jobs window --gpu-gb G --ram-gb R --hours H`
+  (binary in `~/claude-system/coordinator/.venv/bin/`). Start when it
+  fits, or at `earliest_fit`; don't launch into a predicted collision.
+- **Launch runs longer than ~30 min attributed**:
+  `claude-coordinator-jobs run --name <slug> --gpu-gb G --hours H --log <file> -- <cmd>`.
+  Other sessions then see the run, and its footprint is learned.
+- **Adding a new timer/cron job?** `claude-coordinator-jobs slot --hours H [--gpu-gb G]`
+  picks the daily start with the least overlap.
+- `/jobs` has the inventory, forecast, per-job profiles and health.
+
 ## Monitoring long-running ML jobs (>30 min)
 
 Multi-hour training/build jobs are not fire-and-forget. The LLM can

@@ -24,6 +24,10 @@ from typing import Optional
 from . import ccusage
 from .readers import latest_hardware_sample
 
+# A scheduled GPU job starting within this many minutes is "imminent": GPU
+# work longer than that should wait or expect to share VRAM.
+IMMINENT_MIN = 45.0
+
 # A resource at/above this utilization is "busy" (user pref: be aggressive
 # below ~50% utilization).
 BUSY_PCT = 50.0
@@ -118,6 +122,20 @@ def verdict(weekly: Optional[dict] = None, block: Optional[dict] = None,
         hw_room = "free"
         reasons.append("CPU/RAM/GPU below 50% — resources idle")
 
+    # ---- schedule awareness (advisory; never changes the verdict letter) ----
+    schedule = _schedule_context(hw)
+    if schedule.get("running"):
+        names = ", ".join(r["unit"] for r in schedule["running"][:3])
+        reasons.append(f"tracked job(s) running now: {names} — their footprint is already in the numbers above")
+    nxt = schedule.get("next_gpu")
+    if nxt and nxt["starts_in_min"] <= IMMINENT_MIN:
+        reasons.append(
+            f"{nxt['unit']} starts in ~{nxt['starts_in_min']:.0f} min (VRAM ~{nxt['vram_gb']:.1f} GB, "
+            f"~{nxt['duration_min']:.0f} min) — keep new GPU work short or start after ~{nxt['ends_at_hm']} UTC"
+        )
+    elif nxt:
+        reasons.append(f"GPU quiet until {nxt['starts_at_hm']} UTC ({nxt['starts_in_min'] / 60:.1f}h) — {nxt['unit']} next")
+
     # ---- combine ----
     if token_room == "blocked" or hw_room == "blocked":
         v, agg = "hold", "none"
@@ -154,6 +172,32 @@ def verdict(weekly: Optional[dict] = None, block: Optional[dict] = None,
         "hardware": {
             "cpu_pct": cpu, "ram_pct": ram, "gpu_pct": gpu,
             "gpu_free": gpu_free, "disk_free_gb": disk_free,
+            "gpu_free_until": (schedule.get("next_gpu") or {}).get("starts_at"),
         },
+        "schedule": schedule,
         "suggested_session_tokens": suggested,
     }
+
+
+def _schedule_context(hw: Optional[dict]) -> dict:
+    """Running tracked jobs + the next scheduled GPU job, from the job
+    ledger. Pure sqlite reads; empty dict if the ledger is unavailable."""
+    try:
+        from . import jobs
+        now = jobs._now()
+        wins = jobs.forecast(48, now=now)
+    except Exception:
+        return {}
+    running = [{"unit": w.unit, "since": jobs._iso(w.start), "expected_end": jobs._iso(w.end),
+                "vram_gb": w.footprint.vram_gb, "ram_gb": w.footprint.ram_gb}
+               for w in wins if w.kind == "running"]
+    gpu_wins = [w for w in wins if w.kind != "running" and "gpu" in w.footprint.klass and w.start > now]
+    nxt = None
+    if gpu_wins:
+        w = min(gpu_wins, key=lambda w: w.start)
+        nxt = {"unit": w.unit, "starts_at": jobs._iso(w.start), "starts_at_hm": w.start.strftime("%H:%M"),
+               "ends_at": jobs._iso(w.end), "ends_at_hm": w.end.strftime("%H:%M"),
+               "starts_in_min": (w.start - now).total_seconds() / 60,
+               "duration_min": (w.end - w.start).total_seconds() / 60,
+               "vram_gb": w.footprint.vram_gb, "ram_gb": w.footprint.ram_gb}
+    return {"running": running, "next_gpu": nxt}

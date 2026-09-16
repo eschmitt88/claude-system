@@ -3,6 +3,7 @@
 Prints:
 - Claude token usage over the trailing 5h and 7d windows (state.db totals).
 - Latest hardware sample with per-resource units.
+- The box schedule: running tracked jobs, upcoming heavy jobs, GPU-quiet window.
 - The agency (autonomous-spend) verdict.
 
 Pure read path — no writes, no policy. Should return in <1s.
@@ -14,7 +15,7 @@ import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
-from . import agency, ccusage, config
+from . import agency, ccusage, config, jobs
 from .readers import latest_hardware_sample, tokens_in_last
 
 
@@ -36,6 +37,13 @@ def _fmt_pct(v):
 
 def _fmt_usd(v):
     return f"${v:.2f}" if v is not None else "n/a"
+
+
+def _safe_brief(hw):
+    try:
+        return jobs.brief(hw, hours=12)
+    except Exception:
+        return None
 
 
 def render(as_json: bool = False) -> str:
@@ -61,6 +69,7 @@ def render(as_json: bool = False) -> str:
                 "ccusage_weekly": cc_7d,
                 "agency": agency_verdict,
                 "hardware": hw,
+                "schedule_brief": _safe_brief(hw),
                 "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
             },
             indent=2,
@@ -147,6 +156,14 @@ def render(as_json: bool = False) -> str:
         out.append(f"  sampled at {hw.get('timestamp')}")
     else:
         out.append("  no samples yet — check `systemctl --user status claude-hw-poller.timer`")
+
+    out.append("")
+    out.append("=== Scheduled jobs (job ledger; `claude-coordinator-jobs` for detail) ===")
+    try:
+        for line in jobs.brief(hw, hours=12).splitlines():
+            out.append("  " + line)
+    except Exception as e:  # ledger is optional context, never fatal
+        out.append(f"  unavailable ({e.__class__.__name__})")
 
     out.append("")
     out.append("=== Agency (autonomous-spend verdict) ===")

@@ -47,6 +47,21 @@ Act on it:
 Re-check the verdict periodically inside a long autonomous burst (e.g.
 every few units of work), not just once — quota and GPU state move.
 
+### Plan around the box schedule
+
+The verdict's `schedule` block (and the session-start "Box schedule"
+notice) lists tracked jobs running now and the next scheduled GPU job.
+Before a GPU or multi-core run longer than ~15 min:
+
+```sh
+~/claude-system/coordinator/.venv/bin/claude-coordinator-jobs window --gpu-gb <G> --ram-gb <R> --hours <H>
+```
+
+Start when it says `fits`; otherwise start at `earliest_fit` or size the
+run to end before the next GPU job. Launch runs longer than ~30 min via
+`claude-coordinator-jobs run --name <slug> ... -- <cmd>` so they are
+attributed and visible to other sessions. Details: `/jobs`.
+
 ## What `max` changes, skill by skill
 
 - **`/digest`** — after writing candidates, if `agency: max` and the

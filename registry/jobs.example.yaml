@@ -1,0 +1,24 @@
+# Optional operator annotations for the job ledger (claude-coordinator-jobs).
+# Copy to ~/.claude/jobs.yaml. Everything here is OPTIONAL: the ledger
+# discovers jobs and learns footprints on its own. Use this to attach a
+# project label, hide a job from forecasts, or give a brand-new job an
+# expected envelope before it has history.
+#
+# Keys per unit (systemd service name, or "cron:<script-stem>" for crontab):
+#   project        free-text label shown in /jobs and `list`
+#   notes          free text
+#   ignore         true → excluded from forecast / window search / health
+#   expect         envelope used when there are no successful runs yet
+#                  (or always, with prefer_expect: true)
+#     gpu_gb, ram_gb, cores, hours
+#   prefer_expect  true → expect: overrides learned history
+
+jobs:
+  nightly-retrain.service:
+    project: my-model
+    notes: fine-tune + gated promote; VRAM-heavy for ~30 min
+  data-harvest.service:
+    project: my-lake
+    expect: {gpu_gb: 0, ram_gb: 6, cores: 2, hours: 2}
+  some-noisy-monitor.service:
+    ignore: true

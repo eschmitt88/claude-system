@@ -47,6 +47,7 @@ from .projects import (
     tokens_per_day,
 )
 from .ports import registry as ports_registry, extra_projects
+from .jobs import page_data as jobs_page_data
 
 BASE = Path(__file__).resolve().parent
 TEMPLATES = Jinja2Templates(directory=str(BASE / "templates"))
@@ -225,6 +226,23 @@ def ports(request: Request):
         "ports.html",
         _ctx({"active": "ports", "reg": ports_registry()}),
     )
+
+
+@app.get("/jobs", response_class=HTMLResponse)
+def jobs_page(request: Request, hours: float = 24):
+    """Job ledger: inventory, learned footprints, forecast timeline, health."""
+    hours = max(6.0, min(168.0, hours))
+    return TEMPLATES.TemplateResponse(
+        request,
+        "jobs.html",
+        _ctx({"active": "jobs", "d": jobs_page_data(hours)}),
+    )
+
+
+@app.get("/api/jobs.json")
+def jobs_json(hours: float = 24):
+    d = jobs_page_data(max(6.0, min(168.0, hours)))
+    return json.loads(json.dumps(d, default=str))
 
 
 @app.get("/projects/{name}/dashboard")
