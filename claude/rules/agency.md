@@ -59,8 +59,10 @@ Before a GPU or multi-core run longer than ~15 min:
 
 Start when it says `fits`; otherwise start at `earliest_fit` or size the
 run to end before the next GPU job. Launch runs longer than ~30 min via
-`claude-coordinator-jobs run --name <slug> ... -- <cmd>` so they are
-attributed and visible to other sessions. Details: `/jobs`.
+`claude-coordinator-jobs run --name <slug> ... -- <cmd>`: it passes through
+the capacity gate as class `agent` (queues behind production retrains,
+passes immediately when it fits), is attributed, and is visible to other
+sessions. Details: `/jobs`.
 
 ## What `max` changes, skill by skill
 

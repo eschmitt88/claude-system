@@ -44,7 +44,11 @@ def page_data(hours: float = 24.0) -> dict:
             "SELECT unit, started_at, finished_at, duration_s, result, cpu_seconds, peak_rss_gb, peak_vram_gb, "
             "est_ram_gb, est_vram_gb, avg_gpu_util, source FROM job_runs ORDER BY started_at DESC LIMIT 40")]
     q = jobs.quiet_until("gpu", now=now, wins=wins)
+    with jobs.connect() as c:
+        gate_events = [dict(r) for r in c.execute("SELECT * FROM gate_events ORDER BY id DESC LIMIT 20")]
     return {
+        "gate": jobs.gate_state(),
+        "gate_events": gate_events,
         "now": now, "hours": hours, "ticks": ticks,
         "lanes": [{"unit": u, "bars": b} for u, b in lanes.items()],
         "running": [w.as_dict() | {"fp_text": jobs._fmt_fp(w.footprint)} for w in wins if w.kind == "running"],

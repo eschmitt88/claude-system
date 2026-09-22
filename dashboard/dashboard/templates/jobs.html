@@ -38,6 +38,30 @@
   <div class="tl-legend"><span class="tl-bar k-gpu"></span> GPU <span class="tl-bar k-cpu"></span> CPU-heavy <span class="tl-bar k-ram"></span> RAM-heavy <span class="tl-bar k-long-light"></span> long, light <span class="tl-bar k-gpu running"></span> running now</div>
 </div>
 
+<h2>Gate · queue and leases</h2>
+{% if d.gate %}
+<table class="ports-table">
+  <thead><tr><th>State</th><th>Class</th><th>Unit</th><th>Envelope</th><th>Since</th><th>Reason</th></tr></thead>
+  <tbody>{% for u, g in d.gate.items() %}
+  <tr><td>{% if g.state == 'waiting' %}<span class="dot wait"></span>{% else %}<span class="dot up"></span>{% endif %}{{ g.state }}</td>
+      <td>{{ g['class'] }}</td><td class="mono">{{ u }}</td>
+      <td>GPU {{ g.gpu_gb }} G · RAM {{ g.ram_gb }} G{% if g.cores %} · {{ g.cores }} cores{% endif %}</td>
+      <td>{{ (g.started_at or g.requested_at)|replace('T',' ')|replace('Z','') }}</td><td class="port-note">{{ g.reason or '' }}</td></tr>
+  {% endfor %}</tbody>
+</table>
+{% else %}<p class="hub-foot">Nothing waiting; no leases held.</p>{% endif %}
+{% if d.gate_events %}
+<details><summary class="hub-foot">Last {{ d.gate_events|length }} gate decisions</summary>
+<table class="ports-table">
+  <thead><tr><th>When</th><th>Decision</th><th>Unit</th><th>Waited</th><th>Reason</th></tr></thead>
+  <tbody>{% for e in d.gate_events %}
+  <tr><td>{{ e.timestamp|replace('T',' ')|replace('Z','') }}</td>
+      <td>{% if e.decision in ('wait','timeout-run','timeout-skip') %}<span class="dot wait"></span>{% elif e.decision == 'pass' %}<span class="dot up"></span>{% endif %}{{ e.decision }}</td>
+      <td class="mono">{{ e.unit }}</td><td>{{ '%.0f'|format((e.waited_s or 0) / 60) }} min</td><td class="port-note">{{ e.reason or '' }}</td></tr>
+  {% endfor %}</tbody>
+</table></details>
+{% endif %}
+
 <h2>Running now</h2>
 {% if d.running %}
 <table class="ports-table">
@@ -118,7 +142,7 @@ tr.muted td { color: var(--ink-3); }
 .ports-table th, .ports-table td { text-align: left; padding: .4rem .55rem; border-bottom: 1px solid var(--border); vertical-align: top; }
 .ports-table th { font-size: .74rem; text-transform: uppercase; letter-spacing: .03em; color: var(--ink-3); }
 .dot { display: inline-block; width: .55rem; height: .55rem; border-radius: 50%; margin-right: .35rem; vertical-align: middle; }
-.dot.up { background: #22c55e; } .dot.down { background: #ef4444; }
+.dot.up { background: #22c55e; } .dot.down { background: #ef4444; } .dot.wait { background: #f59e0b; }
 .port-note { font-size: .74rem; color: var(--ink-3); }
 </style>
 {% endblock %}

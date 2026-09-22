@@ -104,6 +104,9 @@ if command -v uv >/dev/null 2>&1; then
   # Job ledger: discover timers/crontab and back-fill 14 days of runs from
   # the journal so forecasts have footprints on day one. Idempotent.
   "$REPO_ROOT/coordinator/.venv/bin/claude-coordinator-jobs" sync --backfill 14 2>/dev/null || true
+  # Capacity gates + limits + OnFailure drop-ins for units annotated in
+  # ~/.claude/jobs.yaml (no-op when the file is absent). Idempotent.
+  "$REPO_ROOT/coordinator/.venv/bin/claude-coordinator-jobs" install-gates 2>/dev/null || true
 fi
 
 # Dashboard venv
@@ -118,7 +121,8 @@ USER_UNIT_DIR="$HOME/.config/systemd/user"
 mkdir -p "$USER_UNIT_DIR"
 
 for unit in claude-dashboard.service claude-hw-poller.service claude-hw-poller.timer \
-            claude-rc-snapshot.service claude-rc-snapshot.timer claude-rc-restore.service claude-rc-server.service; do
+            claude-rc-snapshot.service claude-rc-snapshot.timer claude-rc-restore.service claude-rc-server.service \
+            claude-job-failed@.service; do
   src="$REPO_ROOT/scripts/systemd/$unit"
   if [ -f "$src" ]; then
     # Substitute REPO_ROOT + resolved config into the unit file.
