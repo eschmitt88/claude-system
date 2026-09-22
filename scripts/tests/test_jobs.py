@@ -120,6 +120,59 @@ def test_occurrences_monotonic_and_cron():
     assert len(occ) == 2 and occ[0].hour == 3 and occ[0].minute == 0
 
 
+def test_gate_running_job_blocks_big_and_passes_small():
+    running = _win("weekly", -1, 6, vram=8.5, ram=40, kind="running")
+    running.klass = "production"
+    big = jobs.Need(gpu_gb=10, ram_gb=44, hours=1)
+    ok, why, blockers = jobs.gate_decision(big, "production", T0, [running], CAP)
+    assert not ok and blockers == [running] and any(w.startswith("VRAM") for w in why)
+    small = jobs.Need(gpu_gb=0, ram_gb=4, hours=0.5)
+    ok, why, _ = jobs.gate_decision(small, "batch", T0, [running], CAP)
+    assert ok and not why
+
+
+def test_gate_reserves_only_for_higher_class():
+    # A production retrain starts in 30 min; a batch job that would collide must wait,
+    # an agent job that fits alongside passes, and a production job ignores same-class.
+    upcoming = _win("retrain", 0.5, 1, vram=8.5, ram=34)
+    upcoming.klass = "production"
+    batch = jobs.Need(gpu_gb=10, ram_gb=20, hours=3)
+    ok, why, blockers = jobs.gate_decision(batch, "batch", T0, [upcoming], CAP)
+    assert not ok and blockers == [upcoming]
+    ok, _, _ = jobs.gate_decision(jobs.Need(gpu_gb=4, ram_gb=10, hours=3), "agent", T0, [upcoming], CAP)
+    assert ok
+    ok, _, _ = jobs.gate_decision(batch, "production", T0, [upcoming], CAP)   # same class: first-come
+    assert ok
+    ok, _, _ = jobs.gate_decision(batch, "batch", T0, [upcoming], CAP, ignore_reservations=True)  # aged
+    assert ok
+
+
+def test_gate_reservation_only_inside_own_span():
+    later = _win("retrain", 5, 1, vram=8.5, ram=34)
+    later.klass = "production"
+    ok, _, blockers = jobs.gate_decision(jobs.Need(gpu_gb=10, hours=2), "batch", T0, [later], CAP)
+    assert ok and not blockers
+
+
+def test_render_dropin_shape(monkeypatch=None):
+    orig = jobs._unit_exec_start
+    jobs._unit_exec_start = lambda unit: ["/opt/x/retrain.sh --weekly"]
+    try:
+        txt = jobs.render_dropin("x.service", {"class": "production", "max_wait_h": 6, "memory_max": "64G",
+                                              "after": ["ingest.service"], "expect": {"gpu_gb": 8}}, "/bin/jobs")
+    finally:
+        jobs._unit_exec_start = orig
+    assert "OnFailure=claude-job-failed@%n.service" in txt
+    assert "After=ingest.service" in txt
+    assert "ExecStart=\nExecStart=/bin/jobs gate --unit %n --class production --gpu-gb 8 --max-wait 6 -- /opt/x/retrain.sh --weekly" in txt
+    assert "MemoryMax=64G" in txt
+    jobs._unit_exec_start = lambda unit: ["a", "b"]
+    try:
+        assert jobs.render_dropin("y.service", {"class": "batch"}, "/bin/jobs") is None
+    finally:
+        jobs._unit_exec_start = orig
+
+
 if __name__ == "__main__":
     failed = 0
     for name, fn in sorted(globals().items()):

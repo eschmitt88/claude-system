@@ -24,10 +24,23 @@ $J profile <unit>             # one job: duration p90, VRAM/RAM p90, cores, reli
 $J runs [<unit>] -n 20        # recent observed runs
 $J slot --gpu-gb 6 --hours 1  # best recurring daily start for a NEW scheduled job
 $J health                     # jobs failing repeatedly (exit 1 if any)
+$J queue                      # gate: waiting jobs, held leases, recent decisions
 $J sync --backfill 14         # refresh inventory, re-read 14d of journal
 ```
 
 Add `--json` before the subcommand for structured output.
+
+## The capacity gate
+
+Heavy timer jobs are wrapped by `claude-coordinator-jobs gate` through
+systemd drop-ins generated from `~/.claude/jobs.yaml` (`install-gates`).
+The gate starts a job only when its envelope fits beside running leases
+and higher-priority jobs about to start; otherwise it waits (polling every
+45 s) up to a per-job `max_wait`, then runs anyway or skips per policy.
+Classes: `production` > `batch` > `agent`; same class is first-come. Small
+jobs that fit pass immediately. `run` goes through the same gate as class
+`agent` (use `--no-gate` to bypass, `--class` to raise). Every decision is
+in `queue`. Design: `docs/decisions/0002-capacity-gate.md`.
 
 ## Launch long runs attributed
 
@@ -35,9 +48,10 @@ Add `--json` before the subcommand for structured output.
 $J run --name <slug> --gpu-gb 8 --ram-gb 16 --hours 2 --log <path>.log -- python -u train.py
 ```
 
-Runs the command in a transient user unit (`job-<slug>-<mmddHHMM>`), so
-it is cgroup-attributed, appears in `now`/`forecast` for every other
-session, and its footprint feeds future profiles. With `--log` it detaches
+Runs the command in a transient user unit (`job-<slug>-<mmddHHMM>`), gated
+as class `agent`, so it queues behind production work, is cgroup-attributed,
+appears in `now`/`forecast`/`queue` for every other session, and its
+footprint feeds future profiles. A failure pushes an ntfy notice. With `--log` it detaches
 and returns immediately (`journalctl --user -u <unit> -f` or `tail -f`
 to follow); without, it blocks with stdio piped. Prints an advisory note
 if starting now conflicts with the forecast — it never blocks the launch.
@@ -67,6 +81,7 @@ if starting now conflicts with the forecast — it never blocks the launch.
 ## Optional annotations
 
 `~/.claude/jobs.yaml` (untracked; example in
-`~/claude-system/registry/jobs.example.yaml`) can attach `project`,
-`notes`, `ignore: true`, or an `expect:` envelope for a job with no
-history yet.
+`~/claude-system/registry/jobs.example.yaml`) attaches `project`, `notes`,
+`ignore: true`, an `expect:` envelope for a job with no history yet, and
+the gate settings: `class`, `max_wait_h`, `on_timeout`, `memory_max`,
+`nice`, `io_weight`, `after`. Run `install-gates` after editing.

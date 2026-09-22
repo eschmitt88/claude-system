@@ -58,8 +58,15 @@ HEAVY_RAM_GB = 16.0
 BURST_MAX_S = 120.0       # runs shorter than this never matter for planning
 LIGHT_MAX_S = 900.0       # negligible footprint and < 15 min → hidden from timelines
 
-VRAM_MARGIN_GB = 1.0
-RAM_MARGIN_GB = 8.0
+# Headroom kept free for interactive sessions / the OS. Overridable via env
+# (JOBS_RESERVE_VRAM_GB / JOBS_RESERVE_RAM_GB) so ~/.claude/.env can tune it.
+VRAM_MARGIN_GB = float(os.environ.get("JOBS_RESERVE_VRAM_GB", "1.0"))
+RAM_MARGIN_GB = float(os.environ.get("JOBS_RESERVE_RAM_GB", "12.0"))
+
+# Priority classes for the gate. Higher rank reserves capacity against lower.
+CLASS_RANK = {"production": 3, "batch": 2, "agent": 1}
+DEFAULT_MAX_WAIT_H = {"production": 6.0, "batch": 12.0, "agent": 4.0}
+GATE_POLL_S = 45.0
 PROFILE_RUNS = 12         # newest N finished runs feed a profile
 FORECAST_DAYS = 7         # occurrences cached per job
 OCCURRENCE_CAP = 400
@@ -454,12 +461,21 @@ def _gpu_procs() -> list[dict]:
 
 def _read_cgroup(cg: str) -> dict:
     base = CGROUP_ROOT / cg.lstrip("/")
+    """cpu_usec (cumulative), mem_bytes = ANONYMOUS memory (memory.stat
+    anon + shmem: what the job really holds; page cache is reclaimable and
+    would inflate the footprint by tens of GB), mem_peak_bytes = kernel
+    memory.peak (cache-inclusive, kept for reference only)."""
     out = {"cpu_usec": None, "mem_bytes": None, "mem_peak_bytes": None}
     try:
         for line in (base / "cpu.stat").read_text().splitlines():
             if line.startswith("usage_usec"):
                 out["cpu_usec"] = int(line.split()[1])
-        out["mem_bytes"] = int((base / "memory.current").read_text())
+        anon = None
+        for line in (base / "memory.stat").read_text().splitlines():
+            k, _, v = line.partition(" ")
+            if k in ("anon", "shmem"):
+                anon = (anon or 0) + int(v)
+        out["mem_bytes"] = anon if anon is not None else int((base / "memory.current").read_text())
         pk = base / "memory.peak"
         if pk.exists():
             out["mem_peak_bytes"] = int(pk.read_text())
@@ -490,12 +506,17 @@ def sample_running(hw: Optional[dict] = None) -> list[dict]:
     running: list[dict] = []
     live_inv_ids: set[str] = set()
 
+    gate = gate_state()
     for user in (True, False):
         scope = "user" if user else "system"
         for uid, p in _active_tracked(tracked, user).items():
+            g = gate.get(uid)
+            if g and g["state"] == "waiting":
+                continue  # queued behind the gate: not running yet, no footprint to learn
             cg = p.get("ControlGroup") or ""
             inv_id = p.get("InvocationID") or f"{uid}@{p.get('ExecMainStartTimestamp')}"
-            started = _parse_systemd_ts(p.get("ExecMainStartTimestamp")) or \
+            started = (_parse_iso(g["started_at"]) if g and g.get("started_at") else None) or \
+                _parse_systemd_ts(p.get("ExecMainStartTimestamp")) or \
                 _parse_systemd_ts(p.get("ActiveEnterTimestamp")) or now
             cgs = _read_cgroup(cg) if cg else {}
             vram_mb = sum(g["vram_mb"] for g in gpu if cg and g["cgroup"].startswith(cg))
@@ -526,7 +547,7 @@ def sample_running(hw: Optional[dict] = None) -> list[dict]:
                            updated_at = excluded.updated_at""",
                     (uid, scope, inv_id, _iso(started),
                      (row["cpu_usec"] or 0) / 1e6 if row["cpu_usec"] is not None else None,
-                     (row["mem_peak_bytes"] or row["mem_bytes"] or 0) / 1e9,
+                     (row["mem_bytes"] or 0) / 1e9,   # anon; peak = max over samples
                      vram_mb / 1024.0, float(gpu_util or 0.0), _iso(now)))
 
     # Finalize runs the cgroup path saw earlier that are no longer active.
@@ -544,6 +565,7 @@ def sample_running(hw: Optional[dict] = None) -> list[dict]:
         if p.get("InvocationID") == r["invocation_id"] and p.get("Result") not in ("success", "", None):
             result = "failed"
         _finalize_run(r["id"], now, result)
+    _expire_gate_rows()
     _enrich_from_hardware(limit=20)
     return running
 
@@ -835,18 +857,38 @@ class Window:
     kind: str = "scheduled"         # scheduled|running|declared
     jitter_s: float = 0.0
     description: str = ""
+    klass: str = "batch"            # gate priority class
 
     def as_dict(self) -> dict:
         return {"unit": self.unit, "start": _iso(self.start), "end": _iso(self.end),
                 "kind": self.kind, "jitter_s": self.jitter_s, "description": self.description,
-                "footprint": self.footprint.as_dict()}
+                "class": self.klass, "footprint": self.footprint.as_dict()}
+
+
+def job_class(unit: str, ann: Optional[dict] = None) -> str:
+    """Gate priority class from ~/.claude/jobs.yaml; ad-hoc `job-*` units are
+    `agent`, everything else defaults to `batch`."""
+    a = (ann if ann is not None else load_annotations()).get(unit, {}) or {}
+    if a.get("class") in CLASS_RANK:
+        return a["class"]
+    return "agent" if unit.startswith(ADHOC_PREFIX) else "batch"
 
 
 def _running_windows(now: datetime, ann: dict) -> list[Window]:
+    """Jobs occupying the box right now: poller-observed running runs merged
+    with gate leases (a lease is authoritative the instant it is written,
+    before the poller's next tick — that closes the two-jobs-start-at-once
+    race). Envelope = max(lease, learned/observed)."""
     with connect() as c:
         rows = [dict(r) for r in c.execute(
             "SELECT unit, scope, started_at, peak_vram_gb, peak_rss_gb, cpu_seconds FROM job_runs WHERE result = 'running'")]
         declared = {d["unit"]: dict(d) for d in c.execute("SELECT * FROM job_declared")}
+    leases = {u: g for u, g in gate_state().items() if g["state"] == "running"}
+    seen = {r["unit"] for r in rows}
+    for u, g in leases.items():
+        if u not in seen:
+            rows.append({"unit": u, "scope": "user", "started_at": g.get("started_at") or g["requested_at"],
+                         "peak_vram_gb": None, "peak_rss_gb": None, "cpu_seconds": None})
     out = []
     for r in rows:
         started = _parse_iso(r["started_at"]) or now
@@ -858,13 +900,17 @@ def _running_windows(now: datetime, ann: dict) -> list[Window]:
                            gpu_util=100.0 if d.get("gpu_gb") else 0.0, duration_s=(d.get("hours") or 1) * 3600,
                            duration_med_s=(d.get("hours") or 1) * 3600, source="declared")
             fp.klass = classify(fp)
-        # Observed-so-far beats the prior where it is larger.
-        fp.vram_gb = max(fp.vram_gb, r.get("peak_vram_gb") or 0)
-        fp.ram_gb = max(fp.ram_gb, r.get("peak_rss_gb") or 0)
+        # Observed-so-far and the lease both beat the prior where larger.
+        g = leases.get(r["unit"])
+        fp.vram_gb = max(fp.vram_gb, r.get("peak_vram_gb") or 0, (g or {}).get("gpu_gb") or 0)
+        fp.ram_gb = max(fp.ram_gb, r.get("peak_rss_gb") or 0, (g or {}).get("ram_gb") or 0)
+        fp.cores = max(fp.cores, (g or {}).get("cores") or 0)
+        if g and g.get("class"):
+            fp.source = f"lease:{g['class']}"
         elapsed = (now - started).total_seconds()
-        expected = fp.duration_s or 3600.0
+        expected = fp.duration_s or ((g or {}).get("hours") or 1) * 3600.0
         end = started + timedelta(seconds=max(expected, elapsed + 300))  # never "already over"
-        out.append(Window(r["unit"], started, end, fp, kind="running"))
+        out.append(Window(r["unit"], started, end, fp, kind="running", klass=job_class(r["unit"], ann)))
     return out
 
 
@@ -896,7 +942,8 @@ def forecast(hours: float = 24.0, include_light: bool = False, now: Optional[dat
                 continue
             jitter = float(j.get("randomized_delay_s") or 0)
             wins.append(Window(j["unit"], st, st + timedelta(seconds=jitter + dur), fp,
-                               kind="scheduled", jitter_s=jitter, description=j.get("description") or ""))
+                               kind="scheduled", jitter_s=jitter, description=j.get("description") or "",
+                               klass=job_class(j["unit"], ann)))
     wins.sort(key=lambda w: (w.kind != "running", w.start))
     return wins
 
@@ -1099,7 +1146,8 @@ def brief(hw: Optional[dict] = None, hours: float = 12.0, max_lines: int = 6) ->
 # ---------------------------------------------------------------- launcher
 
 def launch(name: str, command: list[str], need: Need, nice: int = 10, log: Optional[str] = None,
-           cwd: Optional[str] = None, description: str = "") -> dict:
+           cwd: Optional[str] = None, description: str = "", gate_cmd: Optional[list[str]] = None,
+           klass: str = "agent") -> dict:
     """Run `command` inside a transient user unit so it is cgroup-attributed
     and visible to every other session as a running job. With `log`, runs
     detached and returns immediately; otherwise blocks (stdio piped)."""
@@ -1115,7 +1163,8 @@ def launch(name: str, command: list[str], need: Need, nice: int = 10, log: Optio
         c.execute("DELETE FROM job_declared WHERE declared_at < datetime('now', '-30 days')")
     cmd = ["systemd-run", "--user", f"--unit={unit}", "--collect", "--same-dir",
            f"--description={description or slug}", f"-p", f"Nice={nice}",
-           "-p", "CPUAccounting=yes", "-p", "MemoryAccounting=yes"]
+           "-p", "CPUAccounting=yes", "-p", "MemoryAccounting=yes",
+           "-p", f"OnFailure={FAILED_TEMPLATE}@{unit}.service"]
     for k in ("PATH", "HOME", "VIRTUAL_ENV", "CUDA_VISIBLE_DEVICES", "HF_HOME", "UV_CACHE_DIR"):
         if os.environ.get(k):
             cmd += [f"--setenv={k}={os.environ[k]}"]
@@ -1124,6 +1173,11 @@ def launch(name: str, command: list[str], need: Need, nice: int = 10, log: Optio
         cmd += ["-p", f"StandardOutput=append:{lp}", "-p", f"StandardError=append:{lp}"]
     else:
         cmd += ["--wait", "--pipe"]
+    if gate_cmd:
+        # Queue behind production work via the same gate the timers use.
+        command = gate_cmd + ["--unit", f"{unit}.service", "--class", klass,
+                              "--gpu-gb", str(need.gpu_gb), "--ram-gb", str(need.ram_gb),
+                              "--cores", str(need.cores), "--hours", str(need.hours), "--"] + command
     cmd += ["--"] + command
     rc = subprocess.call(cmd, cwd=cwd)
     return {"unit": unit, "rc": rc, "detached": bool(log), "log": log,
@@ -1150,3 +1204,318 @@ def tick(hw: Optional[dict] = None) -> None:
             backfill_from_journal()
     except Exception:
         pass
+    try:
+        last = _parse_iso(get_meta("jobs.health_at"))
+        if last is None or (_now() - last) > timedelta(hours=6):
+            notify_health()
+            set_meta("jobs.health_at", _iso(_now()))
+    except Exception:
+        pass
+
+
+# ------------------------------------------------------------------- gate
+#
+# Capacity-aware admission for heavy jobs. Systemd stays the scheduler; the
+# gate wraps a unit's ExecStart (via a generated drop-in) or an ad-hoc `run`,
+# and only decides *when* the command starts. Decisions are recorded so the
+# layer's liveness is measurable (the deleted 2026-08 admission layer never
+# fired and nobody could tell).
+
+FAILED_TEMPLATE = "claude-job-failed"
+DROPIN_NAME = "50-claude-jobs.conf"
+USER_UNIT_DIR = Path.home() / ".config" / "systemd" / "user"
+
+
+def gate_state() -> dict[str, dict]:
+    with connect() as c:
+        return {r["unit"]: dict(r) for r in c.execute("SELECT * FROM job_gate")}
+
+
+def _gate_write(unit: str, **fields) -> None:
+    fields["updated_at"] = _iso(_now())
+    with connect() as c:
+        cur = c.execute("SELECT unit FROM job_gate WHERE unit = ?", (unit,)).fetchone()
+        if cur:
+            sets = ", ".join(f"{k} = ?" for k in fields)
+            c.execute(f"UPDATE job_gate SET {sets} WHERE unit = ?", (*fields.values(), unit))
+        else:
+            cols = ["unit", *fields]
+            c.execute(f"INSERT INTO job_gate({','.join(cols)}) VALUES ({','.join('?' * len(cols))})",
+                      (unit, *fields.values()))
+
+
+def _gate_clear(unit: str) -> None:
+    with connect() as c:
+        c.execute("DELETE FROM job_gate WHERE unit = ?", (unit,))
+
+
+def _gate_event(unit: str, klass: str, decision: str, waited_s: float = 0.0, reason: str = "") -> None:
+    with connect() as c:
+        c.execute("INSERT INTO gate_events(timestamp, unit, class, decision, waited_s, reason) VALUES (?,?,?,?,?,?)",
+                  (_iso(_now()), unit, klass, decision, waited_s, reason[:300]))
+
+
+def _pid_alive(pid: Optional[int]) -> bool:
+    if not pid:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def _expire_gate_rows() -> None:
+    """Drop gate rows whose gate process is gone (crash, SIGKILL, reboot)."""
+    for unit, g in gate_state().items():
+        if not _pid_alive(g.get("pid")):
+            _gate_clear(unit)
+            _gate_event(unit, g.get("class", "?"), "expired", reason="gate process gone")
+
+
+def gate_decision(need: Need, klass: str, now: datetime, wins: list[Window], cap: dict,
+                  ignore_reservations: bool = False) -> tuple[bool, list[str], list[Window]]:
+    """Can a job of `klass` with envelope `need` start now?
+
+    - Running jobs (leases + observed) always count.
+    - Scheduled jobs of a strictly HIGHER class that start inside this job's
+      expected span are reserved: we must fit alongside them too. Same or
+      lower class is first-come: they will queue behind us if needed.
+    Returns (fits, reasons, blocking windows)."""
+    span_end = now + timedelta(hours=need.hours)
+    rank = CLASS_RANK.get(klass, 1)
+    relevant = []
+    for w in wins:
+        if w.kind == "running":
+            relevant.append(w)
+        elif not ignore_reservations and CLASS_RANK.get(w.klass, 1) > rank and w.start < span_end and w.end > now:
+            relevant.append(w)
+    peak, ov = _overlap_peak(relevant, now, span_end)
+    ok, why = fits(need, peak, cap)
+    return ok, why, ov
+
+
+def gate(unit: str, command: list[str], need: Need, klass: str = "batch",
+         max_wait_h: Optional[float] = None, on_timeout: str = "run",
+         dry_run: bool = False, poll_s: float = GATE_POLL_S, log=print) -> int:
+    """Wait for capacity, take a lease, run `command`, release. Returns the
+    command's exit code (or 0 for a skip / dry-run, 2 for a bad request)."""
+    from .readers import latest_hardware_sample
+    klass = klass if klass in CLASS_RANK else "batch"
+    max_wait = timedelta(hours=max_wait_h if max_wait_h is not None else DEFAULT_MAX_WAIT_H[klass])
+    t0 = _now()
+    _gate_write(unit, state="waiting", **{"class": klass}, gpu_gb=need.gpu_gb, ram_gb=need.ram_gb,
+                cores=need.cores, hours=need.hours, requested_at=_iso(t0), pid=os.getpid(), reason="")
+    last_reason = ""
+    try:
+        while True:
+            now = _now()
+            hw = latest_hardware_sample()
+            wins = [w for w in forecast(need.hours + 1, now=now) if w.unit != unit]
+            cap = capacity(hw)
+            waited = (now - t0).total_seconds()
+            aged = waited > max_wait.total_seconds() / 2   # aging: after half the budget, ignore reservations
+            ok, why, blockers = gate_decision(need, klass, now, wins, cap, ignore_reservations=aged)
+            if ok:
+                if dry_run:
+                    _gate_event(unit, klass, "dry-run", waited, "would start now")
+                    log(f"[gate] {unit}: fits now (class {klass}, GPU {need.gpu_gb:g}G RAM {need.ram_gb:g}G) — dry run")
+                    return 0
+                if waited > 0.5 * poll_s:
+                    _gate_event(unit, klass, "wait", waited, last_reason)
+                else:
+                    _gate_event(unit, klass, "pass", 0.0, "")
+                break
+            reason = "; ".join(why) + " | blocked by " + ", ".join(
+                f"{w.unit}[{w.kind}]" for w in blockers if is_heavy(w.footprint))
+            if dry_run:
+                _gate_event(unit, klass, "dry-run", 0.0, "would wait: " + reason)
+                log(f"[gate] {unit}: would WAIT — {reason}")
+                return 0
+            if waited >= max_wait.total_seconds():
+                if on_timeout == "skip":
+                    _gate_event(unit, klass, "timeout-skip", waited, reason)
+                    log(f"[gate] {unit}: waited {waited / 3600:.1f}h, still blocked — SKIPPING ({reason})")
+                    notify(f"job skipped: {unit}", f"waited {waited / 3600:.1f}h for capacity; {reason[:160]}")
+                    return 0
+                _gate_event(unit, klass, "timeout-run", waited, reason)
+                log(f"[gate] {unit}: waited {waited / 3600:.1f}h, still blocked — running anyway ({reason})")
+                notify(f"job running blocked: {unit}", f"waited {waited / 3600:.1f}h; starting into contention. {reason[:140]}")
+                break
+            if reason != last_reason or int(waited) % 600 < poll_s:
+                log(f"[gate] {unit}: waiting ({waited / 60:.0f} min) — {reason}")
+            last_reason = reason
+            _gate_write(unit, reason=reason[:300])
+            import time as _t
+            _t.sleep(poll_s)
+
+        started = _now()
+        _gate_write(unit, state="running", started_at=_iso(started),
+                    expected_end=_iso(started + timedelta(hours=need.hours)), reason="")
+        import signal
+        proc = subprocess.Popen(command)
+
+        def _forward(signum, _frame):
+            try:
+                proc.send_signal(signum)
+            except ProcessLookupError:
+                pass
+        for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+            signal.signal(sig, _forward)
+        return proc.wait()
+    finally:
+        _gate_clear(unit)
+
+
+# ---------------------------------------------------------- notifications
+
+def _load_dotenv() -> dict:
+    env = {}
+    p = Path.home() / ".claude" / ".env"
+    try:
+        for line in p.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, _, v = line.partition("=")
+            env[k.strip().removeprefix("export ").strip()] = v.strip().strip('"').strip("'")
+    except OSError:
+        pass
+    return env
+
+
+def notify(title: str, body: str) -> bool:
+    """Best-effort push via ntfy. Topic from NTFY_TOPIC (env or ~/.claude/.env),
+    server from NTFY_URL (default https://ntfy.sh). Silent no-op if unset."""
+    env = {**_load_dotenv(), **os.environ}
+    topic = env.get("NTFY_TOPIC")
+    if not topic:
+        return False
+    url = env.get("NTFY_URL", "https://ntfy.sh").rstrip("/") + "/" + topic
+    try:
+        import urllib.request
+        req = urllib.request.Request(url, data=body.encode(), headers={"Title": title[:120]}, method="POST")
+        urllib.request.urlopen(req, timeout=10).read()
+        return True
+    except Exception:
+        return False
+
+
+def notify_health(min_streak: int = 2) -> list[dict]:
+    """Push one notification per failing job per day (poller calls this
+    every 6h). Returns what was sent."""
+    sent = []
+    today = _now().strftime("%Y-%m-%d")
+    for b in health(min_streak=min_streak):
+        key = f"jobs.notified:{b['unit']}"
+        if get_meta(key) == today:
+            continue
+        if notify(f"job failing: {b['unit']}", f"{b['issue']} (last {b['last_run']}). journalctl --user -u {b['unit']}"):
+            set_meta(key, today)
+            sent.append(b)
+    return sent
+
+
+# ------------------------------------------------------- drop-in installer
+
+def _unit_exec_start(unit: str) -> list[str]:
+    """Raw ExecStart= lines from the unit's own fragment (not drop-ins)."""
+    out = _run(["systemctl", "--user", "show", "-p", "FragmentPath", "--value", unit])
+    path = Path(out.strip())
+    lines = []
+    try:
+        for line in path.read_text().splitlines():
+            if line.startswith("ExecStart="):
+                lines.append(line[len("ExecStart="):])
+    except OSError:
+        pass
+    return lines
+
+
+def render_dropin(unit: str, a: dict, gate_bin: str) -> Optional[str]:
+    """Drop-in text for a unit from its jobs.yaml annotation, or None."""
+    execs = _unit_exec_start(unit)
+    if len(execs) != 1:
+        return None  # multi-ExecStart or unreadable: leave alone
+    klass = a.get("class", "batch")
+    exp = a.get("expect") or {}
+    args = [gate_bin, "gate", "--unit", "%n", "--class", klass]
+    if exp.get("gpu_gb") is not None:
+        args += ["--gpu-gb", str(exp["gpu_gb"])]
+    if exp.get("ram_gb") is not None:
+        args += ["--ram-gb", str(exp["ram_gb"])]
+    if exp.get("cores") is not None:
+        args += ["--cores", str(exp["cores"])]
+    if exp.get("hours") is not None:
+        args += ["--hours", str(exp["hours"])]
+    if a.get("max_wait_h") is not None:
+        args += ["--max-wait", str(a["max_wait_h"])]
+    if a.get("on_timeout"):
+        args += ["--on-timeout", a["on_timeout"]]
+    unit_lines = [f"OnFailure={FAILED_TEMPLATE}@%n.service"]
+    for dep in a.get("after") or []:
+        unit_lines.append(f"After={dep}")
+    svc_lines = []
+    if a.get("gate", True):
+        svc_lines += ["ExecStart=", "ExecStart=" + " ".join(args) + " -- " + execs[0]]
+    if a.get("memory_max"):
+        svc_lines.append(f"MemoryMax={a['memory_max']}")
+    if a.get("nice") is not None:
+        svc_lines.append(f"Nice={a['nice']}")
+    if a.get("cpu_weight") is not None:
+        svc_lines.append(f"CPUWeight={a['cpu_weight']}")
+    if a.get("io_weight") is not None:
+        svc_lines.append(f"IOWeight={a['io_weight']}")
+    body = ["# Generated by `claude-coordinator-jobs install-gates` from ~/.claude/jobs.yaml.",
+            "# Do not edit; re-run the installer. `uninstall-gates` removes it.",
+            "[Unit]", *unit_lines, "", "[Service]", *svc_lines, ""]
+    return "\n".join(body)
+
+
+def install_gates(gate_bin: Optional[str] = None, dry_run: bool = False) -> list[dict]:
+    """Write (or refresh) drop-ins for every jobs.yaml unit with class/gate/
+    limits set; remove drop-ins for units no longer annotated; daemon-reload."""
+    gate_bin = gate_bin or str(Path(__file__).resolve().parents[1] / ".venv" / "bin" / "claude-coordinator-jobs")
+    ann = load_annotations()
+    results = []
+    wanted = {}
+    for unit, a in ann.items():
+        a = a or {}
+        if unit.startswith("cron:") or not any(k in a for k in ("class", "gate", "memory_max", "after", "nice")):
+            continue
+        text = render_dropin(unit, a, gate_bin)
+        if text is None:
+            results.append({"unit": unit, "action": "skip", "why": "ExecStart not single-line / unit unreadable"})
+            continue
+        wanted[unit] = text
+    for d in USER_UNIT_DIR.glob(f"*.service.d/{DROPIN_NAME}"):
+        unit = d.parent.name.removesuffix(".d")
+        if unit not in wanted:
+            results.append({"unit": unit, "action": "remove"})
+            if not dry_run:
+                d.unlink()
+    for unit, text in wanted.items():
+        path = USER_UNIT_DIR / f"{unit}.d" / DROPIN_NAME
+        cur = path.read_text() if path.exists() else None
+        action = "unchanged" if cur == text else ("update" if cur else "create")
+        results.append({"unit": unit, "action": action, "path": str(path)})
+        if not dry_run and action != "unchanged":
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text)
+    if not dry_run:
+        _run(["systemctl", "--user", "daemon-reload"], timeout=20)
+    return results
+
+
+def uninstall_gates() -> int:
+    n = 0
+    for d in USER_UNIT_DIR.glob(f"*.service.d/{DROPIN_NAME}"):
+        d.unlink(); n += 1
+        try:
+            d.parent.rmdir()
+        except OSError:
+            pass
+    _run(["systemctl", "--user", "daemon-reload"], timeout=20)
+    return n

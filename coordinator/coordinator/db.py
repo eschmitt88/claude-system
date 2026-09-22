@@ -115,6 +115,38 @@ CREATE TABLE IF NOT EXISTS job_declared (
     command     TEXT
 );
 
+
+-- Gate state: one row per unit that is waiting for, or holding, a capacity
+-- lease. Written by `claude-coordinator-jobs gate`; stale rows are expired
+-- by the poller when the unit is no longer active.
+CREATE TABLE IF NOT EXISTS job_gate (
+    unit         TEXT PRIMARY KEY,
+    state        TEXT NOT NULL,        -- waiting | running
+    class        TEXT NOT NULL,        -- production | batch | agent
+    gpu_gb       REAL DEFAULT 0,
+    ram_gb       REAL DEFAULT 0,
+    cores        REAL DEFAULT 0,
+    hours        REAL DEFAULT 1,
+    requested_at TEXT NOT NULL,
+    started_at   TEXT,                 -- command start (lease acquired)
+    expected_end TEXT,
+    pid          INTEGER,
+    reason       TEXT,                 -- last wait reason
+    updated_at   TEXT NOT NULL
+);
+
+-- Every gate decision, so we can tell whether the layer is alive.
+CREATE TABLE IF NOT EXISTS gate_events (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp  TEXT NOT NULL,
+    unit       TEXT NOT NULL,
+    class      TEXT,
+    decision   TEXT NOT NULL,          -- pass | wait | timeout-run | timeout-skip | dry-run
+    waited_s   REAL DEFAULT 0,
+    reason     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_gate_events_time ON gate_events(timestamp);
+
 -- Small key/value store for poller bookkeeping (last journal catch-up, ...).
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,

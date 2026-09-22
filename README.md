@@ -18,7 +18,7 @@ framework-level tour of every part and how they connect (source:
 | `claude/skills-experiment/` | The experiment-loop group (`/propose`, `/implement`, `/iterate`, `/new-experiment`, `/derive-experiment`) — **not** global; linked per-project via `<project>/.claude/skills` (see "Growing a lit repo" below). |
 | `claude/hooks/` | Lifecycle hooks (`SessionStart`, `Stop` = token logger, `PreToolUse` = safety net). |
 | `claude/templates/` | Project and note templates copied by `/new-project` / `/ingest`. |
-| `coordinator/` | Python package. `state.db` schema + writers, hardware poller, **job ledger** (schedule-aware headroom: inventory of timer/cron jobs, learned GPU/RAM/CPU footprints, forecast, window search, attributed launcher), agency verdict. |
+| `coordinator/` | Python package. `state.db` schema + writers, hardware poller, **job ledger** (schedule-aware headroom: inventory of timer/cron jobs, learned GPU/RAM/CPU footprints, forecast, window search, attributed launcher) and its **capacity gate** (systemd drop-ins that make heavy jobs wait for room; see `docs/decisions/0002`), agency verdict. |
 | `registry/` | Service & port registry template (`services.example.yaml` → copy to untracked `services.yaml`); optional job annotations (`jobs.example.yaml` → `~/.claude/jobs.yaml`). |
 | `dashboard/` | FastAPI + HTMX + SSE dashboard. Reads `state.db` + project files. LAN-only. |
 | `scripts/` | Maintenance + bootstrap helpers. |
@@ -139,6 +139,7 @@ for a cheaper implementer.
 ```sh
 ~/claude-system/coordinator/.venv/bin/claude-coordinator-status   # what /headroom shows
 ~/claude-system/coordinator/.venv/bin/claude-coordinator-jobs forecast   # what /jobs shows
+~/claude-system/coordinator/.venv/bin/claude-coordinator-jobs queue      # capacity gate: waits + leases
 systemctl --user status claude-dashboard.service claude-hw-poller.timer
 # dashboard → http://localhost:8080  (or the bind you configured)
 ```

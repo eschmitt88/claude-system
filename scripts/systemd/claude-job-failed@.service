@@ -1,0 +1,6 @@
+[Unit]
+Description=Notify (ntfy) that scheduled job %i failed
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash {{REPO_ROOT}}/claude/lib/job-failed-notify.sh %i

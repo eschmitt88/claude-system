@@ -13,12 +13,19 @@ Subcommands (all accept --json):
   health                jobs failing repeatedly (exit 1 if any)
   sync [--backfill D]   refresh inventory; back-fill runs from the journal
   run --name N [--gpu-gb G --ram-gb R --cores C --hours H --log F --nice N] -- CMD...
-                        launch CMD as a transient, cgroup-attributed user unit
+                        launch CMD as a transient, cgroup-attributed user unit (gated)
+  gate [--unit U --class C --max-wait H --on-timeout run|skip] [envelope] -- CMD...
+                        wait for capacity, lease it, run CMD (what the drop-ins wrap)
+  queue                 waiting jobs, held leases, recent gate decisions
+  install-gates         write systemd drop-ins from ~/.claude/jobs.yaml (gate, limits, OnFailure)
+  uninstall-gates       remove those drop-ins
+  notify-test           send a test ntfy push
 """
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -217,6 +224,78 @@ def cmd_sync(a):
     print(f"running now: {len(running)}")
 
 
+def cmd_gate(a):
+    argv = list(a.argv or [])
+    if argv and argv[0] == "--":
+        argv = argv[1:]
+    if not argv and not a.dry_run:
+        print("gate: missing command after --", file=sys.stderr)
+        sys.exit(2)
+    unit = a.unit or _unit_from_cgroup() or f"gate-pid{os.getpid()}"
+    need = _need(a)
+    # Fill unspecified envelope fields from the learned profile.
+    p = jobs.profile(unit)
+    fp = p["footprint"]
+    if need.gpu_gb == 0 and fp["vram_gb"]:
+        need.gpu_gb = fp["vram_gb"]
+    if need.ram_gb == 0 and fp["ram_gb"]:
+        need.ram_gb = fp["ram_gb"]
+    if need.cores == 0 and fp["cores"]:
+        need.cores = fp["cores"]
+    if a.hours_given is False and fp["duration_s"]:
+        need.hours = max(0.05, fp["duration_s"] / 3600)
+    rc = jobs.gate(unit, argv, need, klass=a.klass, max_wait_h=a.max_wait, on_timeout=a.on_timeout,
+                   dry_run=a.dry_run, log=lambda m: print(m, flush=True))
+    sys.exit(rc)
+
+
+def _unit_from_cgroup() -> str | None:
+    try:
+        for line in open("/proc/self/cgroup"):
+            if line.startswith("0::"):
+                leaf = line.strip().rsplit("/", 1)[-1]
+                return leaf if leaf.endswith(".service") else None
+    except OSError:
+        pass
+    return None
+
+
+def cmd_queue(a):
+    st = jobs.gate_state()
+    with jobs.connect() as c:
+        ev = [dict(r) for r in c.execute("SELECT * FROM gate_events ORDER BY id DESC LIMIT ?", (a.n,))]
+    if a.json:
+        print(json.dumps({"gate": st, "events": ev}, indent=2, default=str))
+        return
+    print("=== Gate: waiting / leases ===")
+    if not st:
+        print("  none")
+    for u, g in st.items():
+        print(f"  {g['state']:7} {g['class']:10} {u[:44]:44} GPU {g['gpu_gb']:g}G RAM {g['ram_gb']:g}G "
+              f"since {_hm(g['started_at'] or g['requested_at'])}" + (f"  — {g['reason']}" if g.get('reason') else ""))
+    print(f"=== Last {a.n} gate decisions ===")
+    for e in ev:
+        print(f"  {_hm(e['timestamp']):10} {e['decision']:12} {e['unit'][:40]:40} waited {e['waited_s'] / 60:.0f}m {e['reason'] or ''}")
+
+
+def cmd_install_gates(a):
+    res = jobs.install_gates(dry_run=a.dry_run)
+    for r in res:
+        print(f"  {r['action']:9} {r['unit']}" + (f"  ({r['why']})" if r.get("why") else ""))
+    if a.dry_run:
+        print("(dry run — nothing written)")
+
+
+def cmd_uninstall_gates(a):
+    print(f"removed {jobs.uninstall_gates()} drop-in(s)")
+
+
+def cmd_notify_test(a):
+    ok = jobs.notify("claude-coordinator-jobs test", "notification path works")
+    print("sent" if ok else "not sent (NTFY_TOPIC unset or request failed)")
+    sys.exit(0 if ok else 1)
+
+
 def cmd_run(a):
     argv = list(a.argv or [])
     if argv and argv[0] == "--":
@@ -233,7 +312,10 @@ def cmd_run(a):
             e = res["earliest_fit"]
             if e:
                 print(f"[jobs] earliest clean window: {_hm(e['start'])} UTC. Proceeding anyway (advisory).", file=sys.stderr)
-    out = jobs.launch(a.name, argv, need, nice=a.nice, log=a.log, description=a.description or "")
+    me = sys.argv[0] if sys.argv[0].endswith("claude-coordinator-jobs") else "claude-coordinator-jobs"
+    gate_cmd = None if a.no_gate else [me, "gate"]
+    out = jobs.launch(a.name, argv, need, nice=a.nice, log=a.log, description=a.description or "",
+                      gate_cmd=gate_cmd, klass=a.klass)
     if a.json:
         print(json.dumps(out))
     elif out["detached"]:
@@ -254,19 +336,37 @@ def main() -> int:
     s = sub.add_parser("profile"); s.add_argument("unit"); s.set_defaults(fn=cmd_profile)
     s = sub.add_parser("forecast"); s.add_argument("--hours", type=float, default=24); s.add_argument("--all", action="store_true"); s.set_defaults(fn=cmd_forecast)
 
+    class _HoursAction(argparse.Action):
+        def __call__(self, parser, ns, values, option_string=None):
+            setattr(ns, self.dest, values); setattr(ns, "hours_given", True)
+
     def need_args(sp):
         sp.add_argument("--gpu-gb", type=float, default=0.0)
         sp.add_argument("--ram-gb", type=float, default=0.0)
         sp.add_argument("--cores", type=float, default=0.0)
-        sp.add_argument("--hours", type=float, default=1.0)
+        sp.add_argument("--hours", type=float, default=1.0, action=_HoursAction)
+        sp.set_defaults(hours_given=False)
 
     s = sub.add_parser("window"); need_args(s); s.add_argument("--horizon", type=float, default=48); s.set_defaults(fn=cmd_window)
     s = sub.add_parser("slot"); need_args(s); s.set_defaults(fn=cmd_slot)
     s = sub.add_parser("health"); s.set_defaults(fn=cmd_health)
     s = sub.add_parser("sync"); s.add_argument("--backfill", type=float, default=0); s.set_defaults(fn=cmd_sync)
+    s = sub.add_parser("gate", help="wait for capacity, lease it, run the command"); need_args(s)
+    s.add_argument("--unit", help="unit name to lease under (default: from /proc/self/cgroup)")
+    s.add_argument("--class", dest="klass", default="batch", choices=sorted(jobs.CLASS_RANK))
+    s.add_argument("--max-wait", type=float, default=None, help="hours (default per class)")
+    s.add_argument("--on-timeout", default="run", choices=["run", "skip"])
+    s.add_argument("--dry-run", action="store_true")
+    s.add_argument("argv", nargs=argparse.REMAINDER); s.set_defaults(fn=cmd_gate)
+    s = sub.add_parser("queue"); s.add_argument("-n", type=int, default=15); s.set_defaults(fn=cmd_queue)
+    s = sub.add_parser("install-gates"); s.add_argument("--dry-run", action="store_true"); s.set_defaults(fn=cmd_install_gates)
+    s = sub.add_parser("uninstall-gates"); s.set_defaults(fn=cmd_uninstall_gates)
+    s = sub.add_parser("notify-test"); s.set_defaults(fn=cmd_notify_test)
     s = sub.add_parser("run"); need_args(s)
     s.add_argument("--name", required=True); s.add_argument("--log"); s.add_argument("--nice", type=int, default=10)
     s.add_argument("--description", default="")
+    s.add_argument("--class", dest="klass", default="agent", choices=sorted(jobs.CLASS_RANK))
+    s.add_argument("--no-gate", action="store_true", help="start immediately, skip the capacity gate")
     s.add_argument("argv", nargs=argparse.REMAINDER, help="command to run (after --)")
     s.set_defaults(fn=cmd_run)
 

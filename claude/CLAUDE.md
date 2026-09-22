@@ -114,7 +114,9 @@ a "Box schedule" notice; `/headroom` repeats it.
   fits, or at `earliest_fit`; don't launch into a predicted collision.
 - **Launch runs longer than ~30 min attributed**:
   `claude-coordinator-jobs run --name <slug> --gpu-gb G --hours H --log <file> -- <cmd>`.
-  Other sessions then see the run, and its footprint is learned.
+  It goes through the capacity gate (class `agent`: waits for production
+  retrains, passes when it fits), other sessions see it, and its
+  footprint is learned. `--no-gate` bypasses; `queue` shows waits.
 - **Adding a new timer/cron job?** `claude-coordinator-jobs slot --hours H [--gpu-gb G]`
   picks the daily start with the least overlap.
 - `/jobs` has the inventory, forecast, per-job profiles and health.
