@@ -1438,18 +1438,46 @@ def notify_health(min_streak: int = 2) -> list[dict]:
 
 # ------------------------------------------------------- drop-in installer
 
-def _unit_exec_start(unit: str) -> list[str]:
-    """Raw ExecStart= lines from the unit's own fragment (not drop-ins)."""
+def _fragment_values(unit: str, key: str) -> list[str]:
+    """Raw `key=` values from the unit's own fragment (not drop-ins)."""
     out = _run(["systemctl", "--user", "show", "-p", "FragmentPath", "--value", unit])
     path = Path(out.strip())
     lines = []
     try:
         for line in path.read_text().splitlines():
-            if line.startswith("ExecStart="):
-                lines.append(line[len("ExecStart="):])
+            if line.startswith(key + "="):
+                lines.append(line[len(key) + 1:])
     except OSError:
         pass
     return lines
+
+
+def _unit_exec_start(unit: str) -> list[str]:
+    """Raw ExecStart= lines from the unit's own fragment (not drop-ins)."""
+    return _fragment_values(unit, "ExecStart")
+
+
+_SPAN_UNITS = {"us": 1e-6, "ms": 1e-3, "s": 1, "sec": 1, "m": 60, "min": 60,
+               "h": 3600, "hr": 3600, "d": 86400}
+
+
+def _parse_timespan(v: str) -> Optional[float]:
+    """systemd time span ("8h", "2h 30min", "5400") -> seconds; None for
+    infinity/empty/unparseable."""
+    v = v.strip()
+    if not v or v == "infinity":
+        return None
+    if re.fullmatch(r"\d+(\.\d+)?", v):
+        return float(v)
+    parts = re.findall(r"(\d+(?:\.\d+)?)\s*([a-z]+)", v)
+    if not parts or re.sub(r"[\d.\sa-z]", "", v):
+        return None
+    total = 0.0
+    for n, u in parts:
+        if u not in _SPAN_UNITS:
+            return None
+        total += float(n) * _SPAN_UNITS[u]
+    return total
 
 
 def render_dropin(unit: str, a: dict, gate_bin: str) -> Optional[str]:
@@ -1478,6 +1506,15 @@ def render_dropin(unit: str, a: dict, gate_bin: str) -> Optional[str]:
     svc_lines = []
     if a.get("gate", True):
         svc_lines += ["ExecStart=", "ExecStart=" + " ".join(args) + " -- " + execs[0]]
+        # The gate waits INSIDE the unit's start timeout, so a wait eats the
+        # job's own budget: 2026-09-27 the AD harvest queued 3h, then was
+        # killed at its 8h mark mid-download. Give the wait its own room.
+        tos = _fragment_values(unit, "TimeoutStartSec")
+        own = _parse_timespan(tos[-1]) if tos else None
+        if own is not None:
+            wait_h = a.get("max_wait_h")
+            wait_h = float(wait_h) if wait_h is not None else DEFAULT_MAX_WAIT_H.get(klass, 6.0)
+            svc_lines.append(f"TimeoutStartSec={int(own + wait_h * 3600)}")
     if a.get("memory_max"):
         svc_lines.append(f"MemoryMax={a['memory_max']}")
     if a.get("nice") is not None:
