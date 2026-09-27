@@ -23,7 +23,8 @@ $J list                       # inventory + learned footprints + fail streaks
 $J profile <unit>             # one job: duration p90, VRAM/RAM p90, cores, reliability
 $J runs [<unit>] -n 20        # recent observed runs
 $J slot --gpu-gb 6 --hours 1  # best recurring daily start for a NEW scheduled job
-$J health                     # jobs failing repeatedly (exit 1 if any)
+$J health                     # jobs failing repeatedly (exit 1 if any unacked)
+$J ack UNIT                   # you fixed a failing job: no alerts until its next run
 $J queue                      # gate: waiting jobs, held leases, recent decisions
 $J sync --backfill 14         # refresh inventory, re-read 14d of journal
 ```

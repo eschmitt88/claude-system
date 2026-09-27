@@ -1065,9 +1065,20 @@ def quiet_until(kind: str = "gpu", now: Optional[datetime] = None, wins: Optiona
 
 # ------------------------------------------------------------------ health
 
-def health(min_streak: int = 2) -> list[dict]:
-    """Jobs whose most recent runs failed consecutively, plus jobs that are
-    overdue (timer says they last ran, but no run row for > 2 periods)."""
+def ack(unit: str) -> str:
+    """Mark a failing job as fixed-but-not-yet-rerun. health() stops
+    reporting it until its next run; if that run fails too, the streak
+    is back. (2026-09-27: a daily job was fixed at 13:10, and the 05:24
+    poll still paged about the streak before the 08:13 run.)"""
+    ts = _iso(_now())
+    set_meta(f"jobs.acked:{unit}", ts)
+    return ts
+
+
+def health(min_streak: int = 2, include_acked: bool = False) -> list[dict]:
+    """Jobs whose most recent runs failed consecutively. A job acked after
+    its last failed run is flagged `acked` and, unless include_acked,
+    left out."""
     ann = load_annotations()
     out = []
     for j in inventory(tracked_only=True):
@@ -1075,8 +1086,14 @@ def health(min_streak: int = 2) -> list[dict]:
             continue
         p = profile(j["unit"], ann)
         if p["fail_streak"] >= min_streak:
+            acked = _parse_iso(get_meta(f"jobs.acked:{j['unit']}"))
+            last = _parse_iso(p["last_run"])
+            is_acked = bool(acked and last and acked > last)
+            if is_acked and not include_acked:
+                continue
             out.append({"unit": j["unit"], "issue": f"failed {p['fail_streak']}× in a row",
-                        "last_run": p["last_run"], "fail_streak": p["fail_streak"]})
+                        "last_run": p["last_run"], "fail_streak": p["fail_streak"],
+                        "acked": _iso(acked) if is_acked else None})
     return out
 
 
@@ -1412,7 +1429,8 @@ def notify_health(min_streak: int = 2) -> list[dict]:
         key = f"jobs.notified:{b['unit']}"
         if get_meta(key) == today:
             continue
-        if notify(f"job failing: {b['unit']}", f"{b['issue']} (last {b['last_run']}). journalctl --user -u {b['unit']}"):
+        if notify(f"job failing: {b['unit']}", f"{b['issue']} (last {b['last_run']}). journalctl --user -u {b['unit']}"
+                  f" — fixed? claude-coordinator-jobs ack {b['unit']} (quiet until its next run)"):
             set_meta(key, today)
             sent.append(b)
     return sent
