@@ -120,6 +120,8 @@ a "Box schedule" notice; `/headroom` repeats it.
 - **Adding a new timer/cron job?** `claude-coordinator-jobs slot --hours H [--gpu-gb G]`
   picks the daily start with the least overlap.
 - `/jobs` has the inventory, forecast, per-job profiles and health.
+- **Fixed a failing scheduled job?** `claude-coordinator-jobs ack <unit>` —
+  silences the fail-streak alert until its next run (which re-alerts if it fails).
 
 ## Monitoring long-running ML jobs (>30 min)
 

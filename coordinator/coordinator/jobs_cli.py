@@ -10,7 +10,8 @@ Subcommands (all accept --json):
   window --gpu-gb G --ram-gb R --cores C --hours H [--horizon 48]
                         earliest slot where that envelope fits
   slot --hours H [...]  best recurring daily start time for a NEW scheduled job
-  health                jobs failing repeatedly (exit 1 if any)
+  health                jobs failing repeatedly (exit 1 if any unacked)
+  ack UNIT              a failing job is fixed: no alerts until its next run
   sync [--backfill D]   refresh inventory; back-fill runs from the journal
   run --name N [--gpu-gb G --ram-gb R --cores C --hours H --log F --nice N] -- CMD...
                         launch CMD as a transient, cgroup-attributed user unit (gated)
@@ -203,15 +204,27 @@ def cmd_slot(a):
 
 
 def cmd_health(a):
-    bad = jobs.health()
+    rows = jobs.health(include_acked=True)
+    bad = [b for b in rows if not b["acked"]]
     if a.json:
-        print(json.dumps(bad, indent=2))
-    elif not bad:
+        print(json.dumps(rows, indent=2))
+    elif not rows:
         print("all scheduled jobs healthy")
     else:
-        for b in bad:
-            print(f"  {b['unit']}: {b['issue']} (last {_hm(b['last_run'])})")
+        for b in rows:
+            tail = f"; acked {_hm(b['acked'])}, awaiting next run" if b["acked"] else ""
+            print(f"  {b['unit']}: {b['issue']} (last {_hm(b['last_run'])}{tail})")
     sys.exit(1 if bad else 0)
+
+
+def cmd_ack(a):
+    ts = jobs.ack(a.unit)
+    p = jobs.profile(a.unit)
+    if a.json:
+        print(json.dumps({"unit": a.unit, "acked": ts, "fail_streak": p["fail_streak"]}))
+    else:
+        print(f"{a.unit}: acked {_hm(ts)} (fail streak {p['fail_streak']}); "
+              "no failure alerts until its next run")
 
 
 def cmd_sync(a):
@@ -350,6 +363,7 @@ def main() -> int:
     s = sub.add_parser("window"); need_args(s); s.add_argument("--horizon", type=float, default=48); s.set_defaults(fn=cmd_window)
     s = sub.add_parser("slot"); need_args(s); s.set_defaults(fn=cmd_slot)
     s = sub.add_parser("health"); s.set_defaults(fn=cmd_health)
+    s = sub.add_parser("ack"); s.add_argument("unit"); s.set_defaults(fn=cmd_ack)
     s = sub.add_parser("sync"); s.add_argument("--backfill", type=float, default=0); s.set_defaults(fn=cmd_sync)
     s = sub.add_parser("gate", help="wait for capacity, lease it, run the command"); need_args(s)
     s.add_argument("--unit", help="unit name to lease under (default: from /proc/self/cgroup)")
