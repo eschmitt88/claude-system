@@ -14,11 +14,11 @@ Answers three questions for an agent about to spend compute on a shared box:
    search for the earliest slot where a requested GPU/RAM/CPU envelope
    fits without colliding.
 
-Advisory only — there is no admission gate. The previous gate
-(``/plan`` + ``jobs`` table, removed 2026-08-01) required agents to
-declare work and never fired. This layer costs the agent nothing: the
-session-start hook, ``/headroom`` and the agency verdict surface it
-automatically.
+Plus a capacity gate (decision 0002): heavy units are wrapped via
+generated systemd drop-ins and wait until their envelope fits. Nothing is
+declared by hand — envelopes are learned, the drop-ins are generated from
+``~/.claude/jobs.yaml``, and the session-start hook, ``/headroom`` and the
+agency verdict surface the schedule automatically.
 """
 from __future__ import annotations
 
@@ -67,6 +67,14 @@ RAM_MARGIN_GB = float(os.environ.get("JOBS_RESERVE_RAM_GB", "12.0"))
 CLASS_RANK = {"production": 3, "batch": 2, "agent": 1}
 DEFAULT_MAX_WAIT_H = {"production": 6.0, "batch": 12.0, "agent": 4.0}
 GATE_POLL_S = 45.0
+# A job below all of these cannot meaningfully hurt anything: the gate
+# passes it without a capacity check (it still takes a lease and records
+# the decision). "Small work never queues behind big work" — decision 0002.
+NEGLIGIBLE_VRAM_GB = 1.0
+NEGLIGIBLE_RAM_GB = 4.0
+NEGLIGIBLE_CORES = 2.0
+# Gate decisions whose wait ended in the command starting (or never starting).
+GATE_WAIT_DECISIONS = ("wait", "timeout-run", "timeout-skip")
 PROFILE_RUNS = 12         # newest N finished runs feed a profile
 FORECAST_DAYS = 7         # occurrences cached per job
 OCCURRENCE_CAP = 400
@@ -780,11 +788,42 @@ def runs_for(unit: str, limit: int = PROFILE_RUNS, finished_only: bool = True) -
         return [dict(r) for r in c.execute(q, (unit, limit))]
 
 
+def _discount_gate_waits(unit: str, runs: list[dict]) -> None:
+    """Subtract time spent queued in the gate from each run's duration, in
+    place. A gated unit is `activating` while it waits, so the journal's
+    start/finish brackets the wait too: the Sunday AD retrain logged 4.2 h
+    for 0.6 h of work, which inflates its p90 and blocks others longer.
+    A run whose gate skipped the command is marked `gate_skipped`."""
+    if not runs:
+        return
+    oldest = min(r["started_at"] for r in runs)
+    with connect() as c:
+        evs = [dict(e) for e in c.execute(
+            "SELECT timestamp, decision, waited_s FROM gate_events WHERE unit = ? AND timestamp >= ? "
+            f"AND decision IN ({','.join('?' * len(GATE_WAIT_DECISIONS))})",
+            (unit, oldest, *GATE_WAIT_DECISIONS))]
+    if not evs:
+        return
+    for r in runs:
+        st, fin = _parse_iso(r["started_at"]), _parse_iso(r.get("finished_at"))
+        if not st or not fin:
+            continue
+        for e in evs:
+            ts = _parse_iso(e["timestamp"])
+            if ts and st <= ts <= fin + timedelta(seconds=60):
+                if e["decision"] == "timeout-skip":
+                    r["gate_skipped"] = True
+                if r.get("duration_s"):
+                    r["duration_s"] = max(0.0, r["duration_s"] - (e["waited_s"] or 0.0))
+                break
+
+
 def profile(unit: str, annotations: Optional[dict] = None) -> dict:
     """Learned footprint for a unit + reliability stats."""
     ann = (annotations if annotations is not None else load_annotations()).get(unit, {}) or {}
     runs = runs_for(unit)
-    ok = [r for r in runs if r["result"] == "done"]
+    _discount_gate_waits(unit, runs)
+    ok = [r for r in runs if r["result"] == "done" and not r.get("gate_skipped")]
     fp = Footprint()
     if ok:
         durs = [r["duration_s"] for r in ok if r["duration_s"] is not None and r["duration_s"] > 0]
@@ -854,7 +893,7 @@ class Window:
     start: datetime
     end: datetime
     footprint: Footprint
-    kind: str = "scheduled"         # scheduled|running|declared
+    kind: str = "scheduled"         # scheduled|running|queued|declared
     jitter_s: float = 0.0
     description: str = ""
     klass: str = "batch"            # gate priority class
@@ -883,7 +922,14 @@ def _running_windows(now: datetime, ann: dict) -> list[Window]:
         rows = [dict(r) for r in c.execute(
             "SELECT unit, scope, started_at, peak_vram_gb, peak_rss_gb, cpu_seconds FROM job_runs WHERE result = 'running'")]
         declared = {d["unit"]: dict(d) for d in c.execute("SELECT * FROM job_declared")}
-    leases = {u: g for u, g in gate_state().items() if g["state"] == "running"}
+    gates = gate_state()
+    leases = {u: g for u, g in gates.items() if g["state"] == "running"}
+    # A unit waiting in the gate is `activating`, so the poller records it
+    # as running — but it holds nothing yet. Counting its learned envelope
+    # made queued jobs block others (2026-09-27: replay-ad waited 51 min on
+    # an AD retrain that was itself still queued). It shows up as `queued`.
+    queued = {u for u, g in gates.items() if g["state"] == "waiting"}
+    rows = [r for r in rows if r["unit"] not in queued]
     seen = {r["unit"] for r in rows}
     for u, g in leases.items():
         if u not in seen:
@@ -914,12 +960,31 @@ def _running_windows(now: datetime, ann: dict) -> list[Window]:
     return out
 
 
+def _queued_windows(now: datetime, ann: dict) -> list[Window]:
+    """Units waiting in the gate: they start as soon as they fit, so model
+    them as [now, now + their requested hours] with their requested need."""
+    out = []
+    for u, g in gate_state().items():
+        if g["state"] != "waiting":
+            continue
+        hours = g.get("hours") or 1.0
+        fp = Footprint(vram_gb=g.get("gpu_gb") or 0.0, ram_gb=g.get("ram_gb") or 0.0,
+                       cores=g.get("cores") or 0.0, gpu_util=100.0 if (g.get("gpu_gb") or 0) >= GPU_VRAM_GB else 0.0,
+                       duration_s=hours * 3600, duration_med_s=hours * 3600, source=f"queued:{g.get('class')}")
+        fp.klass = classify(fp)
+        out.append(Window(u, now, now + timedelta(hours=hours), fp, kind="queued",
+                          klass=g.get("class") or job_class(u, ann)))
+    return out
+
+
 def forecast(hours: float = 24.0, include_light: bool = False, now: Optional[datetime] = None) -> list[Window]:
-    """Predicted busy windows in [now, now+hours], running jobs first."""
+    """Predicted busy windows in [now, now+hours], running jobs first, then
+    jobs queued in the gate, then scheduled occurrences."""
     now = now or _now()
     until = now + timedelta(hours=hours)
     ann = load_annotations()
     wins = _running_windows(now, ann)
+    wins += [w for w in _queued_windows(now, ann) if include_light or w.footprint.klass != "light"]
     running_units = {w.unit for w in wins}
     for j in inventory():
         if j.get("ignored") or not j.get("tracked", 1):
@@ -944,7 +1009,8 @@ def forecast(hours: float = 24.0, include_light: bool = False, now: Optional[dat
             wins.append(Window(j["unit"], st, st + timedelta(seconds=jitter + dur), fp,
                                kind="scheduled", jitter_s=jitter, description=j.get("description") or "",
                                klass=job_class(j["unit"], ann)))
-    wins.sort(key=lambda w: (w.kind != "running", w.start))
+    order = {"running": 0, "queued": 1}
+    wins.sort(key=lambda w: (order.get(w.kind, 2), w.start))
     return wins
 
 
@@ -1138,6 +1204,10 @@ def brief(hw: Optional[dict] = None, hours: float = 12.0, max_lines: int = 6) ->
     run_s = "; ".join(f"{w.unit} since {_fmt_hm(w.start)} (~{_fmt_fp(w.footprint)}, ends ~{_fmt_hm(w.end)})"
                       for w in running) or "nothing tracked"
     lines.append(f"now: {' · '.join(parts)} · running: {run_s}")
+    queued = [w for w in wins if w.kind == "queued"]
+    if queued:
+        lines.append("queued in gate: " + "; ".join(
+            f"{w.unit} ({w.klass}, {_fmt_fp(w.footprint)})" for w in queued))
     heavy = [w for w in wins if w.kind == "scheduled" and is_heavy(w.footprint)]
     ctx = [w for w in wins if w.kind == "scheduled" and not is_heavy(w.footprint)]
     sched = sorted(heavy[:6] + ctx[:max(0, 3 - len(heavy))], key=lambda w: w.start)
@@ -1292,6 +1362,11 @@ def _expire_gate_rows() -> None:
             _gate_event(unit, g.get("class", "?"), "expired", reason="gate process gone")
 
 
+def is_negligible(need: "Need") -> bool:
+    return (need.gpu_gb < NEGLIGIBLE_VRAM_GB and need.ram_gb < NEGLIGIBLE_RAM_GB
+            and need.cores < NEGLIGIBLE_CORES)
+
+
 def gate_decision(need: Need, klass: str, now: datetime, wins: list[Window], cap: dict,
                   ignore_reservations: bool = False) -> tuple[bool, list[str], list[Window]]:
     """Can a job of `klass` with envelope `need` start now?
@@ -1300,7 +1375,11 @@ def gate_decision(need: Need, klass: str, now: datetime, wins: list[Window], cap
     - Scheduled jobs of a strictly HIGHER class that start inside this job's
       expected span are reserved: we must fit alongside them too. Same or
       lower class is first-come: they will queue behind us if needed.
+    - A job queued in the gate counts like a scheduled one starting now.
+    - A negligible job (below every NEGLIGIBLE_* threshold) always fits.
     Returns (fits, reasons, blocking windows)."""
+    if is_negligible(need):
+        return True, [], []
     span_end = now + timedelta(hours=need.hours)
     rank = CLASS_RANK.get(klass, 1)
     relevant = []
@@ -1325,7 +1404,15 @@ def gate(unit: str, command: list[str], need: Need, klass: str = "batch",
     t0 = _now()
     _gate_write(unit, state="waiting", **{"class": klass}, gpu_gb=need.gpu_gb, ram_gb=need.ram_gb,
                 cores=need.cores, hours=need.hours, requested_at=_iso(t0), pid=os.getpid(), reason="")
-    last_reason = ""
+    last_reason, last_blockers, last_logged = "", None, -1e9
+    import signal
+
+    def _stop_while_queued(signum, _frame):
+        _gate_clear(unit)          # don't leave a phantom `waiting` row
+        _gate_event(unit, klass, "stopped", (_now() - t0).total_seconds(), "signal while queued")
+        _die_by(signum)
+    for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
+        signal.signal(sig, _stop_while_queued)
     try:
         while True:
             now = _now()
@@ -1361,8 +1448,12 @@ def gate(unit: str, command: list[str], need: Need, klass: str = "batch",
                 log(f"[gate] {unit}: waited {waited / 3600:.1f}h, still blocked — running anyway ({reason})")
                 notify(f"job running blocked: {unit}", f"waited {waited / 3600:.1f}h; starting into contention. {reason[:140]}")
                 break
-            if reason != last_reason or int(waited) % 600 < poll_s:
+            # Log when the blocking set changes, else every 10 min — the
+            # reason's GB figures jitter every poll (a 3 h wait was 240 lines).
+            blockers_key = tuple(sorted(w.unit for w in blockers)) + tuple(sorted(r.split(" ")[0] for r in why))
+            if blockers_key != last_blockers or waited - last_logged >= 600:
                 log(f"[gate] {unit}: waiting ({waited / 60:.0f} min) — {reason}")
+                last_blockers, last_logged = blockers_key, waited
             last_reason = reason
             _gate_write(unit, reason=reason[:300])
             import time as _t
@@ -1371,7 +1462,6 @@ def gate(unit: str, command: list[str], need: Need, klass: str = "batch",
         started = _now()
         _gate_write(unit, state="running", started_at=_iso(started),
                     expected_end=_iso(started + timedelta(hours=need.hours)), reason="")
-        import signal
         proc = subprocess.Popen(command)
 
         def _forward(signum, _frame):
@@ -1381,9 +1471,26 @@ def gate(unit: str, command: list[str], need: Need, klass: str = "batch",
                 pass
         for sig in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
             signal.signal(sig, _forward)
-        return proc.wait()
+        rc = proc.wait()
     finally:
         _gate_clear(unit)
+    if rc < 0:
+        # Die the way the child died. Returning -15 became exit status 241,
+        # so a deliberate `systemctl stop` read as a failed job and paged
+        # (2026-09-26 drift retrain). systemd treats SIGTERM/INT/HUP deaths
+        # as a clean stop; a start timeout still reports result 'timeout'.
+        _die_by(-rc)
+    return rc
+
+
+def _die_by(sig: int) -> None:
+    """Terminate this process with signal `sig` (default disposition)."""
+    import signal
+    try:
+        signal.signal(sig, signal.SIG_DFL)
+    except (OSError, ValueError):
+        pass  # SIGKILL/SIGSTOP: not catchable, already default
+    os.kill(os.getpid(), sig)
 
 
 # ---------------------------------------------------------- notifications
