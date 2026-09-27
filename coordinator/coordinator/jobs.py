@@ -1217,7 +1217,9 @@ def brief(hw: Optional[dict] = None, hours: float = 12.0, max_lines: int = 6) ->
         lines.append(f"next {hours:.0f}h: " + " · ".join(items))
     else:
         lines.append(f"next {hours:.0f}h: no heavy scheduled jobs")
-    q = quiet_until("gpu", now=now, wins=wins)
+    # Its own 48h horizon: `wins` only covers `hours` (12 by default), which
+    # told every session "no GPU job in 48h" with retrains ~16h out.
+    q = quiet_until("gpu", now=now, horizon_h=48.0)
     if q:
         h = (q - now).total_seconds() / 3600
         lines.append(f"GPU quiet until {_fmt_hm(q)} UTC ({h:.1f}h). Longer GPU run? "
