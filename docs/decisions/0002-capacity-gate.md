@@ -91,3 +91,37 @@ wrapper still buys attribution and limits, so it stays.
 - Review after four weeks: zero Sunday failures, `gate_events` showing
   real waits with sensible durations, no interactive latency regression,
   no job skipped without a notification.
+
+## Addendum — 2026-09-27, first busy Sunday
+
+The first five days were all passes. The first Sunday produced three waits,
+which surfaced five defects (all fixed in `coordinator/jobs.py`):
+
+1. **Queued jobs counted as running.** A unit waiting in the gate is
+   `activating`, so the poller recorded it as running with its full learned
+   envelope. The AD retrain, itself queued behind the weekly retrain, held
+   a phantom 52 GB and blocked the replay harvest for 51 min. Queued units
+   are now their own window kind (`queued`, `[now, now + hours]`, requested
+   need): they occupy nothing, and reserve against strictly lower classes,
+   which is what decision 4 always said.
+2. **Small work did queue behind big work.** Two 1.5 GB, 0.2-core harvests
+   waited 51 and 180 min because the projected load was already over the
+   line without them. A job below every `NEGLIGIBLE_*` threshold (1 GB
+   VRAM, 4 GB RAM, 2 cores) now passes without a capacity check; it still
+   leases and is recorded.
+3. **Gate waits ate the unit's start timeout.** The wait runs inside
+   `TimeoutStartSec`, so the AD harvest (8 h timeout, 6 h max wait) was
+   killed mid-download after a 3 h queue. Drop-ins now set
+   `TimeoutStartSec` = the unit's own + its max wait.
+4. **Waits leaked into learned durations**, contrary to the consequence
+   stated above (the Sunday AD retrain logged 4.2 h for 0.6 h of work).
+   `profile()` now subtracts each run's gate wait (from `gate_events`), and
+   a run the gate skipped contributes no footprint.
+5. **A deliberate `systemctl stop` paged as a failure.** The gate returned
+   the child's `-15` as exit status 241. It now dies by the child's signal,
+   which systemd treats as a clean stop; a start timeout still reports
+   `timeout`. A stop while queued clears the gate row and records `stopped`.
+
+Also: wait logging fires on a change of blockers or every 10 min (a 3 h
+wait had logged 240 near-identical lines), and a fixed job can be
+`ack`ed to quiet its fail-streak alert until its next run.

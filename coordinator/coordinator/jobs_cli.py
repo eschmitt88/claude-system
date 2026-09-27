@@ -133,7 +133,7 @@ def cmd_forecast(a):
     if not wins:
         print("  nothing heavy scheduled")
     for w in wins:
-        tag = {"running": "RUNNING ", "declared": "declared", "scheduled": "        "}[w.kind]
+        tag = {"running": "RUNNING ", "queued": "QUEUED  ", "declared": "declared", "scheduled": "        "}[w.kind]
         j = f"+{int(w.jitter_s // 60)}m" if w.jitter_s else ""
         print(f"  {tag} {w.start.strftime('%a %H:%M')}{j:>4} → {w.end.strftime('%a %H:%M')}  {w.unit[:40]:40} {_fp_line(w.footprint.as_dict())}")
     q = jobs.quiet_until("gpu", now=now, wins=wins)
