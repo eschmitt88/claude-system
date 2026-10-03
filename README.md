@@ -12,7 +12,7 @@ framework-level tour of every part and how they connect (source:
 | Path | Purpose |
 |---|---|
 | `claude/CLAUDE.md` | Durable user instructions (symlinked to `~/.claude/CLAUDE.md`). |
-| `claude/settings.json` | Claude Code settings (hooks, permissions). |
+| `claude/settings.example.json` | Scrubbed Claude Code settings (hooks, permissions). The live `~/.claude/settings.json` is a private real file, seeded from this once. |
 | `claude/rules/` | Scoped rules auto-loaded by path (e.g. `evaluation.md` = HCE discipline). |
 | `claude/skills/` | Global slash-command skills — the knowledge-base group (`/discover`, `/ingest`, `/curate`, `/lint`, `/headroom`, `/jobs`, …), loaded in every project. |
 | `claude/skills-experiment/` | The experiment-loop group (`/propose`, `/implement`, `/iterate`, `/new-experiment`, `/derive-experiment`) — **not** global; linked per-project via `<project>/.claude/skills` (see "Growing a lit repo" below). |
@@ -87,9 +87,10 @@ units, and starts them. Re-run it any time to upgrade or to apply config
 changes.
 
 > **⚠️ Review before installing — you adopt this repo's agent behavior.**
-> `install.sh` symlinks `claude/CLAUDE.md` and `claude/settings.json` into
-> `~/.claude/` as *your* global instructions and settings (existing files
-> are backed up first). These carry opinionated defaults: the instructions
+> `install.sh` symlinks `claude/CLAUDE.md` into `~/.claude/` as *your* global
+> instructions and seeds `~/.claude/settings.json` from
+> `claude/settings.example.json` if you have none (existing files are backed
+> up or left alone). These carry opinionated defaults: the instructions
 > tell agents to **commit and push automatically** at checkpoints in every
 > git repo, and the settings **suppress permission prompts**
 > (`skipDangerousModePermissionPrompt`, `skipAutoPermissionPrompt`) and pin
