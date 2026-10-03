@@ -36,3 +36,7 @@ claude/schedule/
 
 # Hook runtime artifacts
 claude/hooks/auto-push.err
+
+# Live Claude Code settings are machine-private (auto-mode environment names
+# private repos and hosts). The repo tracks claude/settings.example.json.
+claude/settings.json

@@ -61,9 +61,20 @@ done
 if [ -L "$CLAUDE_DIR/rules" ]; then rm "$CLAUDE_DIR/rules"; echo "  [unlink] $CLAUDE_DIR/rules (rules now load per-project)"; fi
 
 echo "=> Linking framework files into $CLAUDE_DIR/"
-for f in CLAUDE.md settings.json; do
-  link "$REPO_ROOT/claude/$f" "$CLAUDE_DIR/$f"
-done
+link "$REPO_ROOT/claude/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
+
+# settings.json is machine-private (its auto-mode environment names private
+# repos and hosts), so it is a real file in ~/.claude, never a link into this
+# public repo. Seed it once from the scrubbed example; an old install's link
+# into the repo is converted to a real copy in place.
+SETTINGS="$CLAUDE_DIR/settings.json"
+if [ -L "$SETTINGS" ]; then
+  cp --remove-destination "$(readlink -f "$SETTINGS")" "$SETTINGS"
+  echo "  [real] $SETTINGS (was a link into the repo)"
+elif [ ! -e "$SETTINGS" ]; then
+  cp "$REPO_ROOT/claude/settings.example.json" "$SETTINGS"
+  echo "  [seed] $SETTINGS from claude/settings.example.json (edit to taste)"
+fi
 
 # .env: never touch an existing one. Only emit the example if nothing
 # exists at all.
