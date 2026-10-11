@@ -8,6 +8,8 @@ respects:
 
 # digest
 
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+
 Periodic, low-touch literature sweep. Where `/discover <topic>` is
 user-initiated and focused, `/digest` is autonomous and broad — it
 re-reads the project's current direction and surfaces what's new

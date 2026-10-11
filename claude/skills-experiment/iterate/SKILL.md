@@ -8,6 +8,8 @@ respects:
 
 # iterate
 
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+
 Drive the propose → implement → diagnose loop one step at a time, or
 in a chain under explicit halting conditions.
 
@@ -82,7 +84,7 @@ Between cycles, read **only** each completed experiment's
    with a short header if missing:
 
    ```
-   YYYY-MM-DD HH:MM  <seed-slug>  →  <proposal-slug>  →  <experiment-slug>  Δ<metric>=<delta>  budget{wall=<h>,tokens=<t>,experiments=<n>}
+   YYYY-MM-DD HH:MM  <seed-slug>  →  <proposal-slug>  →  <experiment-slug>  Δ<metric>=<delta> band=<std|none>  budget{wall=<h>,tokens=<t>,experiments=<n>}
    ```
 
 ## Steps (`--chain` / `--chain-until` mode)
@@ -109,6 +111,15 @@ It reads `budget.yaml`'s ceilings as implicit conditions, sums
 halt, and name the tripped condition. Write one line per cycle to
 `_meta/iteration_log.md` with a `budget{...}` suffix from `totals` so
 the user can see the running numbers.
+
+**What counts as an improvement.** `--consecutive-no-improvement` is the
+number of consecutive cycles whose metric did not beat the chain's best by
+more than the noise band. When either run used `--seeds N>1`, the band is the
+larger of the two `std` values its Diagnostics report. A single-run metric
+has no band, so a strictly positive delta counts as an improvement and the
+log line says `band=none`. Reset the counter only on an improvement beyond
+the band. A "new best" inside the band is a coin flip, and counting it
+stops `max_consecutive_no_improvement` from ever firing.
 
 If budget.yaml is missing (`budget_present: false`), chain on explicit
 `--chain N` / `--chain-until` only; log a warning on the first cycle.

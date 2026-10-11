@@ -8,6 +8,8 @@ respects:
 
 # curate
 
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+
 `/discover` and `/digest` *open* candidate files in `raw/_candidates/`;
 nothing *closes* them, so they accumulate and read as "uncurated" forever.
 This skill is the close: review each item, act, and archive the file.

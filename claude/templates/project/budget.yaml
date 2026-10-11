@@ -1,4 +1,9 @@
 # Hard ceilings for autonomous runs. Chain halts when any is hit.
+# Enforcement is between actions: a tripped ceiling stops the NEXT
+# call, never the one in flight, so real spend overshoots the ceiling
+# by up to one worst-case call (40% overshoot measured in the wild).
+# Size each ceiling 10-15% below your true tolerance so ceiling plus
+# overshoot still lands inside it.
 # Sized for a Max plan box running the latest Opus for both roles.
 max_wall_hours: 24
 max_tokens: 5000000

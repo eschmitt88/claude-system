@@ -80,9 +80,12 @@ DVC tracks data and model artifacts. Git tracks code, configs, and notes.
 ## Framework rules (research projects only)
 
 The HCE evaluation discipline and the agency (autonomous-spend) levels
-live at `~/claude-system/claude/rules/{evaluation,agency}.md` and load
-via each research project's `CLAUDE.md` `@import`s — not globally, so
-they cost context only where they apply.
+live at `~/claude-system/claude/rules/{evaluation,agency}.md`. They are
+not loaded globally, and `@` imports can't reach them (imports resolve
+only inside the project tree), so they are read on demand: every skill
+that lists them under `respects:` Reads them first, and outside a skill,
+read `evaluation.md` before designing or judging an evaluation and
+`agency.md` before an autonomous run.
 
 ## Knowledge graph hygiene
 

@@ -8,6 +8,8 @@ respects:
 
 # discover
 
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+
 Surface candidate reading on a topic. The goal is a short, ranked list
 the user can curate — a triage, not a library dump.
 

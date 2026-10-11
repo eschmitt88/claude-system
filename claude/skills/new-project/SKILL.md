@@ -39,8 +39,8 @@ in the template and needs no build step.
 
 Afterwards:
 
-1. **Sync imports**: if the scaffolded `CLAUDE.md` contains `@import`
-   lines pointing at `agentic-research/concepts/`, run `/sync-imports`
+1. **Sync imports**: if the scaffolded `CLAUDE.md` declares
+   `agentic-research/concepts/` paths, run `/sync-imports`
    so the hub's concepts gain `used_by:` back-references immediately.
 2. **Report**: print the tree (depth 2), the absolute path, and the
    remote / Pages URLs if created.

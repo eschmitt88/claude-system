@@ -8,6 +8,8 @@ respects:
 
 # propose
 
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+
 Produce a single experiment proposal. This is the ideation half of the
 MLE-IDEATOR split: **no code, no scaffolding, no dvc.yaml edits**. The
 output is a decision document.

@@ -7,6 +7,8 @@ respects:
 
 # promote-moc
 
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+
 Turn an accumulating cluster of concepts into a navigable Map of Content.
 The framework's rule (user `CLAUDE.md`): "when >=5 related concepts
 accumulate on a theme, promote them to a `mocs/<theme>.md`." `/lint`

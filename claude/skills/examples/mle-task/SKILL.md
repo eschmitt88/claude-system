@@ -7,6 +7,8 @@ respects:
 
 # mle-task
 
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+
 Scaffold one MLE-bench task in the active project so that `/implement`
 and `/iterate` can drive it through the normal research loop.
 

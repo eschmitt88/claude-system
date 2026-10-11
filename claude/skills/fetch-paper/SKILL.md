@@ -8,6 +8,8 @@ respects:
 
 # fetch-paper
 
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+
 Pull a primary source into the project's `raw/` tree and hand off to
 `/ingest`. The skill is idempotent — running it twice on the same
 input leaves the filesystem unchanged the second time.
