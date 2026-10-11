@@ -1,6 +1,6 @@
 ---
 name: sync-imports
-description: Scan the active project for @import directives pointing at agentic-research/concepts/ and append idempotent used_by: back-references to each target concept file. Standalone skill factored out of /ingest so it can run independent of any raw/ file. /ingest and /new-project both call it.
+description: Scan the active project for declared dependencies on agentic-research/concepts/ (lines naming a concept path) and append idempotent used_by: back-references to each target concept file. Standalone skill factored out of /ingest so it can run independent of any raw/ file. /ingest and /new-project both call it.
 ---
 
 # sync-imports
@@ -22,8 +22,8 @@ None. Operates on the active project.
 - **Automatically**: `/ingest` calls `/sync-imports` before showing its
   diff batch; `/new-project` calls it right after scaffolding so the
   inherited imports register immediately.
-- **Manually**: after editing a project's `CLAUDE.md` to add a new
-  `@import` line — before starting a session that relies on the
+- **Manually**: after editing a project's `CLAUDE.md` to declare a new
+  hub concept — before starting a session that relies on the
   back-reference being present on the meta side.
 
 ## Skip condition
@@ -38,17 +38,24 @@ action. The meta project doesn't back-reference itself.
 2. **Skip self-reference**: if the project basename is
    `agentic-research`, exit 0 with a one-line message.
 
-3. **Scan for `@import` directives**. Files to search:
+3. **Scan for concept declarations**. Files to search:
    - the project root `CLAUDE.md`;
    - every file under `.claude/rules/**/*.md`;
    - every file under `experiments/**/CLAUDE.md` (experiment-level
      imports exist too and count).
 
-   Match lines of the form:
-   ```
-   @import ~/projects/research/agentic-research/concepts/<name>.md
-   ```
+   Match any line naming a hub concept path,
+   `~/projects/research/agentic-research/concepts/<name>.md` (a
+   leading `@import` / `@` on older lines is legacy and still matches).
    Expand `~` to the user's home. Deduplicate absolute paths.
+
+   These lines are a **declaration, not a load**. Claude Code resolves
+   `@` imports only inside the project tree, so a concept in
+   `agentic-research/` never enters a downstream session's context.
+   `used_by:` records which projects claim a concept, which is what the
+   meta project needs in order to see what is load-bearing. It does not
+   mean the concept text was read — a downstream session that needs it
+   reads the file by path.
 
 4. **For each matched path**, append an idempotent entry to the
    target concept file's `used_by:` frontmatter list:
@@ -73,9 +80,9 @@ action. The meta project doesn't back-reference itself.
    replaces it") but still perform the append. Tracking retired-concept
    usage is signal to the meta project.
 
-6. **Target-missing handling**: if an `@import` points at a path that
-   doesn't exist, emit a one-line warning ("WARNING: @import target
-   <path> not found") and skip the append. Do not fabricate the file.
+6. **Target-missing handling**: if a declared concept path doesn't
+   exist, emit a one-line warning ("WARNING: declared concept <path>
+   not found") and skip the append. Do not fabricate the file.
 
 7. **Write the back-references** — an artifact write (bookkeeping, not
    hypothesis selection), so no confirmation gate; show the diff of

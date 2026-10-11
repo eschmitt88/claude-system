@@ -7,6 +7,8 @@ respects:
 
 # ingest
 
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+
 Turn a raw source into a processed literature note and seed any concepts
 it raises.
 
@@ -137,7 +139,7 @@ it raises.
 
 ## Cross-project import back-reference — call `/sync-imports`
 
-The back-reference append logic (scan `@import` directives → append
+The back-reference append logic (scan concept declarations → append
 idempotent `used_by:` entries on the meta side) lives in the
 dedicated `/sync-imports` skill. `/ingest` calls it as part of step
 7 so any concept-file modifications land in the same diff batch as
@@ -160,6 +162,6 @@ after editing `CLAUDE.md`.
 - If the file under `raw/` is empty or unreadable, abort and tell the user.
 - The cross-project sub-contract runs even when the primary ingest
   has no concept updates of its own (e.g. re-ingesting an existing
-  raw file to pick up a new `@import` in CLAUDE.md). In that case,
+  raw file to pick up a new concept declaration in CLAUDE.md). In that case,
   the diff batch contains only meta-project concept updates plus a
   log line.

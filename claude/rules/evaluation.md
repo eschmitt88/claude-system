@@ -38,6 +38,19 @@ agents must not read, list, glob, or sample from the project's
 no `head`, no `ls test/`, no `dvc pull test/*`, no notebook cell
 that touches `test/`.
 
+**The boundary includes retrieval, not just the filesystem.** During
+search-phase skills, do not web-search or fetch the task's own
+benchmark artifacts — its leaderboard, published solutions or
+write-ups, the dataset's hosting or discussion pages, or the withheld
+source method of a discovery-style task. Retrieved content that
+carries held-out labels or a published solution is holdout access by
+another route: the score stops measuring search and starts measuring
+lookup. Technique-level retrieval (API docs, library usage, general
+methods) is fine — the test is whether the query names the task or
+benchmark rather than the technique. If task-specific artifacts
+surface unexpectedly, record it in `log.md` and surface it when
+reporting metrics; don't bury it.
+
 The only permitted access is a **final-scoring pass**, invoked
 explicitly at chain end (not inside `/iterate --chain` cycles),
 whose single job is to run the held-out evaluation and write

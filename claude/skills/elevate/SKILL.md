@@ -7,6 +7,8 @@ respects:
 
 # elevate
 
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+
 The `agentic-research` repo is research-about-research: it curates
 literature and concepts on how autonomous research agents are built. Some
 of those findings are about exactly the kind of system *this box runs* —
@@ -96,6 +98,17 @@ viable form is complex, that is itself a reason to hold.
    either gate; note the strongest one or two discards in the run log so the
    reasoning is visible.
 
+   **Then run the paired control.** Pick one proposal in
+   `docs/system-proposals/` with `status: accepted` — rotate oldest-first —
+   and re-test it against the two gates *as they read today*, using only the
+   evidence its `evidence_citekeys` cited at the time. It should pass: it was
+   accepted, applied, and the system is better for it. If it would now be
+   rejected, the gates have drifted strict — say so in the run log and name
+   which gate rejected it. A cycle where the control fails is not a quiet
+   cycle, it is a broken gate, and from the output alone the two are
+   identical. (This detects drift toward strictness over time; it cannot
+   detect a gate that was mis-calibrated from the start.)
+
 5. **Write a proposal per survivor** at
    `docs/system-proposals/YYYY-MM-DD-<slug>.md` with flat frontmatter:
 
@@ -129,7 +142,7 @@ viable form is complex, that is itself a reason to hold.
 
 6. **Index + log.** Append a one-line pointer to
    `docs/system-proposals/_index.md` (create it if absent). Append to
-   `_meta/log.md`: `YYYY-MM-DD HH:MM elevate proposals=<k> considered=<m>`.
+   `_meta/log.md`: `YYYY-MM-DD HH:MM elevate proposals=<k> considered=<m> control=<slug>:<pass|fail>`.
    On a zero-proposal cycle, still write the log line with `proposals=0` and
    a few words on what was considered and held — silence must not read as
    "nothing was examined."

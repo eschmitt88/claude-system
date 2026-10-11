@@ -8,8 +8,10 @@
 # or otherwise persisting what matters.
 set -euo pipefail
 
-# Swallow stdin payload; we do not currently need its fields.
-cat > /dev/null || true
+# transcript_path is a common hook-input field (token_logger.sh and
+# status_emit.sh read it the same way). Bounded read, as in session-end.sh.
+payload="$(timeout 2 cat || true)"
+transcript="$(printf '%s' "$payload" | jq -r '.transcript_path // empty' 2>/dev/null || true)"
 
 cat <<'EOF'
 PreCompact: before compaction, persist anything load-bearing to disk.
@@ -21,3 +23,17 @@ PreCompact: before compaction, persist anything load-bearing to disk.
 - Auto-memory is a hint, not a home — promote anything the next session
   must see into a tracked file.
 EOF
+
+if [ -n "$transcript" ]; then
+  cat <<EOF
+
+The full pre-compaction transcript stays on disk at:
+  $transcript
+
+Compaction demotes detail; it does not delete it. Write the address with
+whatever you persist — cite this path (and the file + heading you wrote to)
+so a later turn can recover the exact original instead of trusting the
+summary. If after compaction the summary looks like it dropped something,
+read this file rather than reconstructing from memory.
+EOF
+fi

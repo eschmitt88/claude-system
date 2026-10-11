@@ -157,9 +157,11 @@ with a standard layout (README, config.yaml, metrics.json, results/,
 splits.yaml where applicable). See individual `SKILL.md` files for
 contracts.
 
-The `agentic-research` project is the meta-hub: `concepts/` files are
-`@import`ed by downstream projects, and `/sync-imports` appends
-`used_by:` back-references.
+The `agentic-research` project is the meta-hub: downstream projects
+declare the `concepts/` they depend on, and `/sync-imports` appends
+`used_by:` back-references. The declaration is a dependency record, not
+a context load — Claude Code `@` imports resolve only inside the project
+tree, so a hub concept never enters a downstream session automatically.
 
 ### Standalone GitHub presence (per-project Pages)
 
@@ -234,9 +236,9 @@ serve this repo's reading or start a new line of work:
 
 - **Spawn a downstream project** when the experiments have their own
   identity (own data, own budget, many runs) or the concepts serve
-  more than one consumer: `/new-project --experiments`, then `@import`
-  the hub's concepts (the import contract writes `used_by:`
-  back-references).
+  more than one consumer: `/new-project --experiments`, then declare
+  the hub concepts it depends on (`/sync-imports` writes `used_by:`
+  back-references; read the concepts by path, they don't auto-load).
 - **Graduate in place** when there is a single consumer and reading
   and running are one thread:
   1. `ln -s ~/claude-system/claude/skills-experiment .claude/skills`

@@ -7,6 +7,8 @@ respects:
 
 # lint
 
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+
 Surface knowledge-graph rot and HCE-rule violations.
 
 ## How
@@ -37,6 +39,15 @@ The script reports; you judge:
   a consolidation signal for a human to merge/retire — flag, don't
   promote. (Full merge/split detection deferred; see agentic-research
   `docs/system-proposals/2026-06-28-lint-consolidation-check.md`.)
+- **Rule-consistency pass.** If any loaded instruction file (user
+  `CLAUDE.md`, project `CLAUDE.md`, `.claude/rules/*`, `budget.yaml`,
+  the framework rules under `~/claude-system/claude/rules/`) changed
+  since the last lint run (`git log` on both repos), read the set as
+  one policy and flag: contradictions between files, the same contract
+  stated in more than one place (drift risk — name the file that
+  should own it), and references to files, skills, scripts, flags, or
+  `@` imports that don't resolve. Report-only, like everything else
+  here; skip silently when nothing changed.
 - **Suggest the next action** per finding: link it, `/curate` it,
   implement it, or lower `relevance:` and move on.
 

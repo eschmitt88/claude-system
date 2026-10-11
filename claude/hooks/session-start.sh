@@ -44,4 +44,9 @@ done
 
 echo "# Tail of NOTES.md for $(basename "$root")"
 echo
+echo "Reading rule: entries below that state a **limit** on a direction you are"
+echo "about to take — a \"Next\" item, a deferral, a hold, a \"don't do X yet\" —"
+echo "are the ones to re-check against the repo before acting on them. Later"
+echo "entries here supersede earlier ones without deleting them."
+echo
 tail -n 50 "$root/NOTES.md"

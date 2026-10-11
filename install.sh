@@ -46,10 +46,11 @@ link() {
 }
 
 echo "=> Linking framework directories into $CLAUDE_DIR/"
-# rules/ is deliberately NOT linked: evaluation.md/agency.md load via
-# project-CLAUDE.md @imports so they cost context only where they apply
-# (instruction-ablation-program, phase 5). Skills reference them by
-# their stable ~/claude-system/claude/rules/ paths.
+# rules/ is deliberately NOT linked (not loaded globally, so they cost
+# context only where they apply — instruction-ablation-program, phase 5).
+# CLAUDE.md @imports can't reach them (imports resolve only inside the
+# project tree), so they are read on demand by path: every skill that
+# lists them under `respects:` Reads them as its first step.
 # lib/ holds secret-free shell helpers that the UNTRACKED cron wrappers in
 # ~/.claude/schedule/ source. Those wrappers stay out of this public repo
 # (notification topics, private paths — see README); linking lib/ keeps the

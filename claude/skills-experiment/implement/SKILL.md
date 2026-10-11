@@ -7,6 +7,8 @@ respects:
 
 # implement
 
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+
 Turn a proposal into a run. This is the **only** skill in the framework
 that is allowed to spawn a subagent.
 
