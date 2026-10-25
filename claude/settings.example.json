@@ -64,5 +64,10 @@
   "skipDangerousModePermissionPrompt": true,
   "theme": "auto",
   "skipAutoPermissionPrompt": true,
-  "agentPushNotifEnabled": true
+  "agentPushNotifEnabled": true,
+  "statusLine": {
+    "type": "command",
+    "command": "$HOME/.claude/hooks/statusline.sh",
+    "padding": 0
+  }
 }

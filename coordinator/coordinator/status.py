@@ -14,6 +14,7 @@ import json
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+from typing import Optional
 
 from . import agency, ccusage, config, jobs
 from .readers import latest_hardware_sample, tokens_in_last
@@ -44,6 +45,30 @@ def _safe_brief(hw):
         return jobs.brief(hw, hours=12)
     except Exception:
         return None
+
+
+def _basis_str(w: dict) -> str:
+    basis = w.get("limit_basis")
+    if basis == "observed":
+        return " — observed+delta"
+    if basis == "calibrated":
+        return " — calibrated est."
+    return " of Max-20x est."
+
+
+def _observed_line(label: str, w: Optional[dict]) -> Optional[str]:
+    if not w or w.get("observed_pct") is None:
+        return None
+    age = w.get("observation_age_min") or 0
+    age_s = f"{age}m" if age < 120 else f"{age / 60:.0f}h"
+    stale = "  (stale anchor)" if age > 24 * 60 else ""
+    lim = w.get("calibrated_limit_usd")
+    lim_s = f"${lim:,.0f}" if lim else "static"
+    return (
+        f"    {label} anchor: {w['observed_pct']:.0f}% reported {age_s} ago "
+        f"+ {w.get('delta_pct') or 0:.1f}% since  "
+        f"[ceiling {lim_s}, {w.get('calibration_source')}]{stale}"
+    )
 
 
 def render(as_json: bool = False) -> str:
@@ -78,10 +103,14 @@ def render(as_json: bool = False) -> str:
 
     out = []
     if cc_block or cc_7d:
-        out.append("=== Claude quota (via ccusage — reads ~/.claude/projects/*.jsonl) ===")
+        observed = any((w or {}).get("limit_basis") in ("observed", "calibrated")
+                       for w in (cc_block, cc_7d))
+        src = ("Anthropic-reported % via status line + transcript spend since"
+               if observed else "via ccusage — reads ~/.claude/projects/*.jsonl")
+        out.append(f"=== Claude quota ({src}) ===")
         if cc_block:
             pct = cc_block.get("pct_vs_max20x_limit")
-            pct_str = f" ({pct:.1f}% of Max-20x est.)" if pct is not None else ""
+            pct_str = f" ({pct:.1f}%{_basis_str(cc_block)})" if pct is not None else ""
             rem = cc_block.get("remaining_minutes")
             rem_str = f"~{rem // 60}h {rem % 60}m left" if rem is not None else "active"
             out.append(
@@ -109,20 +138,23 @@ def render(as_json: bool = False) -> str:
             out.append("  5h block: no active block (no usage in current window)")
         if cc_7d:
             pct_w = cc_7d.get("pct_vs_max20x_limit")
-            pct_w_str = f" ({pct_w:.1f}% of Max-20x est.)" if pct_w is not None else ""
+            pct_w_str = f" ({pct_w:.1f}%{_basis_str(cc_7d)})" if pct_w is not None else ""
             out.append(
                 f"  weekly: {_fmt_tokens(cc_7d['tokens'])} tokens  "
                 f"{_fmt_usd(cc_7d.get('cost_usd'))}{pct_w_str}"
             )
+            n = (f"{cc_7d['n_blocks']} blocks" if cc_7d.get("n_blocks") is not None
+                 else f"{cc_7d.get('n_messages', 0)} messages")
             out.append(
-                f"    window: {cc_7d.get('window_start')} → {cc_7d.get('window_end')} "
-                f"({cc_7d.get('n_blocks', 0)} blocks)"
+                f"    window: {cc_7d.get('window_start')} → {cc_7d.get('window_end')} ({n})"
             )
-        out.append("  note: weekly % is reset-anchored (since Mon 17:00 local) and")
-        out.append("        well-calibrated (2026-05-22 → 10.1% matches claude.ai 10%).")
-        out.append("        5h % is approximate: ccusage's block boundary drifts up")
-        out.append("        to ~1h from Anthropic's session boundary, so it can")
-        out.append("        underestimate the true session %.")
+        for label, w in (("5h", cc_block), ("weekly", cc_7d)):
+            line = _observed_line(label, w)
+            if line:
+                out.append(line)
+        if not observed:
+            out.append("  note: no status-line reading yet — % is ccusage spend against a")
+            out.append("        static ceiling (5h % especially rough: hour-rounded blocks).")
     else:
         out.append("=== Claude quota (sum of observed Stop-hook events) ===")
         out.append(

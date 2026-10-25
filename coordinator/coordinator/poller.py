@@ -13,7 +13,7 @@ import psutil
 
 from .db import prune_hardware_samples
 from .writers import insert_hardware_sample
-from . import jobs
+from . import calibrate, jobs
 
 
 def _sample_gpu() -> dict:
@@ -76,6 +76,12 @@ def main() -> int:
     # Job ledger: inventory refresh, per-unit cgroup/GPU attribution for
     # running scheduled jobs, periodic journal catch-up. Never raises.
     jobs.tick(sample)
+    # Refit plan-quota ceilings when the status line logged new readings
+    # (at most every 15 min; a no-op stat otherwise).
+    try:
+        calibrate.maybe_run()
+    except Exception:
+        pass
     # Idempotent pruning; cheap. 30 days feeds job-footprint learning.
     prune_hardware_samples(keep_days=30)
     return 0

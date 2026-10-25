@@ -17,6 +17,7 @@ claude-coordinator-init = "coordinator.init_db:main"
 claude-coordinator-status = "coordinator.status:main"
 claude-coordinator-agency = "coordinator.agency_cli:main"
 claude-coordinator-jobs = "coordinator.jobs_cli:main"
+claude-coordinator-calibrate = "coordinator.calibrate:main"
 
 [build-system]
 requires = ["setuptools>=68"]

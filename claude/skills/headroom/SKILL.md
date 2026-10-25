@@ -32,13 +32,14 @@ skills):
 
 ## What it shows
 
-- **Claude quota (via `ccusage`)** — reads per-message `usage` blocks
-  from `~/.claude/projects/*/*.jsonl` and aggregates over two windows:
-  the active 5h billing block, and the reset-anchored weekly window
-  (since the last Mon 17:00 local — the same boundary claude.ai uses).
-  Reports tokens, cost, burn rate, projected end-of-block usage, and
-  percentage against the Max-20x ceiling for each window. Falls back
-  to a local Stop-hook accumulator if `ccusage` isn't on PATH.
+- **Claude quota** — two windows (current 5h session, weekly). Preferred
+  basis is **Anthropic's own %**: Claude Code hands it to the status line
+  (`claude/hooks/statusline.sh`), which stores the newest reading in
+  `~/.claude/state/rate-limits.json`; /headroom shows
+  `reported % + spend since that reading / ceiling`, with exact window
+  bounds from Anthropic's `resets_at`. Spend is read straight from
+  `~/.claude/projects/**/*.jsonl` (`coordinator/transcripts.py`).
+  Without a reading it falls back to `ccusage` against static ceilings.
 - **Hardware (latest sample)** — CPU / RAM / disk on `/mnt/projects` /
   GPU utilization + VRAM + temperature + power. Sampled every 30s by
   the `claude-hw-poller.timer` systemd unit.
@@ -51,49 +52,30 @@ skills):
   session token budget (drives `agency: max` repos). Includes a
   schedule reason when a GPU job is imminent (≤45 min).
 
-## ccusage dependency
+## Where the numbers come from
 
-The quota section shells out to `ccusage` (Node.js CLI). Install once:
-
-```bash
-npm i -g ccusage
-npm update -g ccusage   # occasionally, to track upstream
-```
-
-Both ccusage calls run concurrently with `--offline` (skips pricing
-fetch) and a 3s timeout each. If `ccusage` is missing or hangs, the
-coordinator falls back to the legacy Stop-hook accumulator silently.
-
-Anthropic doesn't publish exact Max-20x quota numbers. Both ceilings
-live in `coordinator/coordinator/ccusage.py`:
-
-- `MAX_20X_WEEKLY_TOKEN_LIMIT` ≈ 2.31B. **Well-calibrated** from a
-  reset-anchored 4-day window on 2026-05-22 (231M tokens = 10% used).
-  /headroom's weekly % now matches claude.ai to within ~0.1pp.
-- `MAX_20X_5H_TOKEN_LIMIT` ≈ 184M. **Poorly calibrated.** Two data
-  points (2026-05-13: 3% at 5.5M, 2026-05-22: 3% at 27.7M) disagree
-  by 5x because ccusage's block boundary is hour-rounded while
-  Anthropic anchors to your actual first message — so a chunk of
-  ccusage's "active block" can belong to a *previous* claude.ai
-  session. The displayed 5h % can underestimate by ~2-3x. Treat as
-  a rough lower bound; the projection/burn-rate fields are more
-  useful than the headline %.
-
-Recalibrating the **weekly** number: read claude.ai's weekly %, run
-`/headroom --json | jq .ccusage_weekly.tokens`, divide tokens by
-(pct / 100), update the constant. The longer the window the cleaner
-the signal — late-week snapshots are best.
-
-The 5h calibration is genuinely hard without identifying the true
-claude.ai session boundary. Don't trust the 5h ceiling for budgeting;
-use the projection field instead.
+- **Readings** only arrive from *interactive* sessions (headless
+  `claude -p` never renders a status line). Between readings, spend
+  since the last one is added; the anchor line shows its age and is
+  flagged stale after 24h.
+- **Ceilings are self-calibrating.** Every changed reading is logged to
+  `~/.claude/state/rate-limits.ndjson`; `calibrate.py` (run by the
+  poller, ≤ every 15 min, or `claude-coordinator-calibrate`) fits
+  `L = window spend / reported %` per window (readings ≥ 20% only) into
+  `~/.claude/state/quota-calibration.json`. Bonus weeks are absorbed
+  automatically — no manual recalibration or override files.
+- **Fallback** (no reading in the current window): calibrated ceiling
+  if one exists, else `ccusage` vs the static `QUOTA_*` values in
+  `~/.claude/.env` (and the legacy override files). `npm i -g ccusage`
+  is only needed for this path.
 
 ## Troubleshooting
 
 - "no samples yet" under Hardware → `systemctl --user status
   claude-hw-poller.timer`. Re-enable with `systemctl --user enable
   --now claude-hw-poller.timer`.
-- "ccusage not installed" note → run the install command above.
+- "no status-line reading yet" note → open/answer any interactive
+  session; check `jq . ~/.claude/state/rate-limits.json`.
 - Slow (>1s) → likely a cold `ccusage` invocation; warm runs are
   ~0.5s. If persistent, check `du -sh ~/.claude/state.db` and verify
   `prune_hardware_samples` runs (it does on every poller tick).
