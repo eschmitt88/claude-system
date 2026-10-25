@@ -22,6 +22,8 @@ from datetime import datetime, time, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
+from . import calibrate, ratelimits, transcripts
+
 # A legit `blocks` run was measured at 6.3s on 2026-08-03 (scales with
 # transcript volume) and was flaking against the old 8s bound.
 _TIMEOUT_S = 30
@@ -76,6 +78,14 @@ def _estimate_cost(counts: dict, models: list) -> Optional[float]:
 
 # ---------------------------------------------------------------------------
 # Plan-quota calibration.
+#
+# Preferred path (ratelimits.py / calibrate.py): Claude Code's status line
+# reports Anthropic's own 5h / 7d utilisation; claude/hooks/statusline.sh
+# records it, the % below becomes "last reading + spend since", and the
+# ceilings are refitted automatically from the logged readings. Everything
+# in this section is the FALLBACK for when no reading exists yet (no
+# interactive session has reported) — including the override files, which
+# are only consulted on that path.
 #
 # Anthropic doesn't publish plan ceilings, so the limits below are
 # *calibrated*, not known. The weekly quota is evidently cost-weighted
@@ -216,7 +226,137 @@ def _run(args: list[str]) -> Optional[dict]:
         return None
 
 
+def _observed(window: str) -> Optional[dict]:
+    """Blend Anthropic's last reported % with spend since that reading.
+
+    pct = anchor_pct + 100 * cost(anchor .. now) / L, where L is the
+    auto-calibrated ceiling (calibrate.py). Before any calibration exists,
+    L is bootstrapped from the anchor itself (cost-so-far / pct) when the
+    anchor is >= calibrate.MIN_PCT. With no anchor in this window but a
+    calibrated L, pct = cost(window) / L. Returns None when neither exists,
+    so callers fall back to the static-ceiling path.
+
+    One transcript scan over the window yields both the totals and the
+    delta, so cost_usd and the ceiling are always in the same units."""
+    cur = ratelimits.current_window(window)
+    if cur is None:
+        return None
+    start, end, anchor = cur
+    limit, limit_src = calibrate.current_limit(window)
+    if anchor is None and limit is None:
+        return None
+    usage, records = transcripts.scan(start)
+    now = datetime.now(timezone.utc)
+    out = {
+        "usage": usage,
+        "start": start,
+        "end": end,
+        "observed_pct": None,
+        "observed_at": None,
+        "observation_age_min": None,
+        "delta_pct": None,
+        "calibration_source": limit_src,
+    }
+    if anchor is not None:
+        cost_at, tokens_at, _ = transcripts.CumulativeCost(records).at(anchor["observed_at"])
+        delta_cost = usage.cost_usd - cost_at
+        if limit is None and anchor["used_pct"] >= calibrate.MIN_PCT and cost_at > 0:
+            limit, out["calibration_source"] = cost_at / (anchor["used_pct"] / 100), "anchor"
+        if limit is not None:
+            delta_pct = 100.0 * delta_cost / limit
+        elif window == "five_hour":
+            delta_pct = 100.0 * (usage.tokens - tokens_at) / QUOTA_5H_TOKEN_LIMIT
+            out["calibration_source"] = "static-tokens"
+        else:
+            delta_pct = 100.0 * delta_cost / QUOTA_WEEKLY_COST_LIMIT_USD
+            out["calibration_source"] = "static-usd"
+        observed_at = datetime.fromtimestamp(anchor["observed_at"], timezone.utc)
+        out.update(
+            pct=anchor["used_pct"] + delta_pct,
+            basis="observed",
+            observed_pct=anchor["used_pct"],
+            observed_at=observed_at.isoformat(),
+            observation_age_min=int((now - observed_at).total_seconds() // 60),
+            delta_pct=delta_pct,
+        )
+    else:
+        out.update(pct=100.0 * usage.cost_usd / limit, basis="calibrated")
+    out["limit_usd"] = limit
+    # Token-space consumers (agency pacing, projections) divide by this;
+    # deriving it from the blended % keeps them consistent with it.
+    out["effective_token_limit"] = (
+        int(usage.tokens * 100 / out["pct"]) if out["pct"] >= 0.5 and usage.tokens else None
+    )
+    return out
+
+
+def _usage_fields(u: "transcripts.Usage") -> dict:
+    return {
+        "tokens": u.tokens,
+        "input_tokens": u.input_tokens,
+        "output_tokens": u.output_tokens,
+        "cache_read_tokens": u.cache_read_tokens,
+        "cache_creation_tokens": u.cache_creation_tokens,
+        "cost_usd": u.cost_usd,
+        "models": sorted(u.models),
+    }
+
+
+def _obs_fields(o: dict) -> dict:
+    return {
+        "limit_basis": o["basis"],
+        "observed_pct": o["observed_pct"],
+        "observed_at": o["observed_at"],
+        "observation_age_min": o["observation_age_min"],
+        "delta_pct": o["delta_pct"],
+        "calibrated_limit_usd": o["limit_usd"],
+        "calibration_source": o["calibration_source"],
+    }
+
+
+def _observed_block() -> Optional[dict]:
+    o = _observed("five_hour")
+    if o is None:
+        return None
+    u, now = o["usage"], datetime.now(timezone.utc)
+    elapsed_min = max(1.0, (now - o["start"]).total_seconds() / 60)
+    remaining_min = max(0, int((o["end"] - now).total_seconds() // 60))
+    burn = u.tokens / elapsed_min
+    cost_per_min = u.cost_usd / elapsed_min
+    limit_tokens = o["effective_token_limit"] or QUOTA_5H_TOKEN_LIMIT
+    return {
+        **_usage_fields(u),
+        "start_time": o["start"].isoformat(),
+        "end_time": o["end"].isoformat(),
+        "remaining_minutes": remaining_min,
+        "burn_tokens_per_min": burn,
+        "burn_cost_per_hour": cost_per_min * 60,
+        "projection_tokens": u.tokens + burn * remaining_min,
+        "projection_cost": u.cost_usd + cost_per_min * remaining_min,
+        "historical_max_tokens": None,
+        "pct_vs_historical_max": None,
+        "max20x_limit_tokens": limit_tokens,
+        "pct_vs_max20x_limit": o["pct"],
+        **_obs_fields(o),
+    }
+
+
 def active_block() -> Optional[dict]:
+    """Return the current 5h window, or None.
+
+    Uses Anthropic's observed % when a status-line reading covers the
+    current window (exact window bounds from resets_at, no hour-rounding);
+    otherwise ccusage's active block against the static token ceiling."""
+    try:
+        observed = _observed_block()
+    except Exception:
+        observed = None
+    if observed is not None:
+        return observed
+    return _ccusage_block()
+
+
+def _ccusage_block() -> Optional[dict]:
     """Return the currently active 5h billing block, or None.
 
     Shape of the returned dict (subset of ccusage's payload):
@@ -307,6 +447,32 @@ def _weekly_window() -> tuple[datetime, datetime]:
 
 
 def weekly_anchored() -> Optional[dict]:
+    """Weekly quota usage. Observed/calibrated path when available (window
+    bounds from Anthropic's resets_at), else the static-ceiling ccusage
+    path. Returns None on failure."""
+    try:
+        o = _observed("seven_day")
+    except Exception:
+        o = None
+    if o is None:
+        return _ccusage_weekly()
+    now_local = datetime.now().astimezone()
+    return {
+        **_usage_fields(o["usage"]),
+        "n_blocks": None,
+        "n_messages": o["usage"].n_messages,
+        "window_start": o["start"].astimezone().isoformat(),
+        "window_end": o["end"].astimezone().isoformat(),
+        "remaining_hours": max(0, int((o["end"] - now_local).total_seconds() // 3600)),
+        "max20x_limit_tokens": o["effective_token_limit"] or QUOTA_WEEKLY_TOKEN_LIMIT,
+        "max20x_limit_cost_usd": o["limit_usd"],
+        "pct_vs_max20x_limit": o["pct"],
+        "limit_override_active": False,
+        **_obs_fields(o),
+    }
+
+
+def _ccusage_weekly() -> Optional[dict]:
     """Sum tokens since the last quota reset (scheduled Mon 17:00 local,
     or an out-of-band override) — matches claude.ai's weekly-quota window.
     Returns None on failure.

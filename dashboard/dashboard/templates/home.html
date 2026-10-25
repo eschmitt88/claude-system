@@ -30,11 +30,13 @@
   {# === Claude quota === #}
   {% if cc_block %}
     {{ stat(
-      'Tokens · 5h block',
+      'Quota · 5h',
       cc_block.pct_vs_max20x_limit,
       '%s tokens · $%.2f'|format('{:,}'.format(cc_block.tokens), cc_block.cost_usd or 0),
       sub=(
-        '%sh %sm left · burn %s/min'|format(
+        ('reported %.0f%% + %.1f%% since · '|format(cc_block.observed_pct, cc_block.delta_pct or 0)
+          if cc_block.get('observed_pct') is not none else '')
+        ~ '%sh %sm left · burn %s/min'|format(
           (cc_block.remaining_minutes or 0) // 60,
           (cc_block.remaining_minutes or 0) % 60,
           '{:,}'.format((cc_block.burn_tokens_per_min or 0) | int)
@@ -43,7 +45,7 @@
     ) }}
   {% else %}
     {{ stat(
-      'Tokens · 5h block',
+      'Quota · 5h',
       None,
       '{:,} tokens (stop-hook accumulator)'.format(tokens_5h.total),
       sub='ccusage unavailable — run npm i -g ccusage'
@@ -52,17 +54,18 @@
 
   {% if cc_7d %}
     {{ stat(
-      'Tokens · weekly',
+      'Quota · weekly',
       cc_7d.pct_vs_max20x_limit,
       '%s tokens · $%.2f'|format('{:,}'.format(cc_7d.tokens), cc_7d.cost_usd or 0),
-      sub='%d blocks · resets in %dh (Mon 17:00 local)'|format(
-        cc_7d.n_blocks or 0,
-        cc_7d.remaining_hours or 0
+      sub=(
+        ('reported %.0f%% %dm ago + %.1f%% since · '|format(cc_7d.observed_pct, cc_7d.observation_age_min or 0, cc_7d.delta_pct or 0)
+          if cc_7d.get('observed_pct') is not none else ('calibrated est. · ' if cc_7d.get('limit_basis') == 'calibrated' else 'static-ceiling est. · '))
+        ~ 'resets in %dh'|format(cc_7d.remaining_hours or 0)
       )
     ) }}
   {% else %}
     {{ stat(
-      'Tokens · weekly',
+      'Quota · weekly',
       None,
       '{:,} tokens (stop-hook accumulator)'.format(tokens_7d.total),
       sub='ccusage unavailable'

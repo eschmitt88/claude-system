@@ -52,8 +52,11 @@ def _pace(weekly: Optional[dict]) -> dict:
     used = weekly.get("tokens", 0)
     out["limit"] = limit
     out["used"] = used
-    out["pct"] = 100.0 * used / limit
-    out["remaining"] = max(0, limit - used)
+    # Prefer the producer's % (observed/blended when available); it and
+    # used/limit agree by construction except for tiny early-window %.
+    pct = weekly.get("pct_vs_max20x_limit")
+    out["pct"] = pct if pct is not None else 100.0 * used / limit
+    out["remaining"] = max(0, int(limit * (1 - out["pct"] / 100)))
     try:
         start = datetime.fromisoformat(weekly["window_start"])
         end = datetime.fromisoformat(weekly["window_end"])
@@ -62,8 +65,8 @@ def _pace(weekly: Optional[dict]) -> dict:
         out["hours_to_reset"] = max(0.0, (end - now).total_seconds() / 3600)
         if total > 0:
             elapsed = max(0.0, min(1.0, (now - start).total_seconds() / total))
-            on_pace = limit * elapsed          # steady-spend target by now
-            out["slack_frac"] = (on_pace - used) / limit  # >0 = behind pace
+            # Steady-spend target by now vs spent; >0 = behind pace.
+            out["slack_frac"] = elapsed - out["pct"] / 100
     except (ValueError, KeyError, TypeError):
         pass
     return out
