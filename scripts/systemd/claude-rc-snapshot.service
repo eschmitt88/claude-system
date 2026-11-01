@@ -3,4 +3,4 @@ Description=Snapshot live Claude Code Remote Control sessions for restore-on-boo
 
 [Service]
 Type=oneshot
-ExecStart=/home/<user>/claude-system/scripts/claude_rc_restore.py snapshot
+ExecStart={{HOME}}/claude-system/scripts/claude_rc_restore.py snapshot
