@@ -165,7 +165,8 @@ except Exception:
 
         commit_ok=1
         if [ "$have_changes" -eq 1 ]; then
-          msg="session: $(date +%F) $(hostname)"
+          # no hostname: these commits land in public repos too
+          msg="session: $(date +%F)"
           if ! { git -C "$root" add -A 2>>"$push_err" \
                  && git -C "$root" commit -m "$msg" 2>>"$push_err"; }; then
             commit_ok=0

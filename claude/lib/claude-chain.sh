@@ -20,6 +20,19 @@
 # Env:    CLAUDE_MODELS  comma-separated chain (default "opus,sonnet")
 # Returns 0 if any model completed, 1 if the whole chain failed.
 
+# Redaction for logs that land in (often public) repos. The patterns are
+# machine-private — they ARE the identifiers — so they live outside this
+# repo in ~/.config/claude-redact.sed (a sed -E script, one s### per
+# line). Without it, only $HOME is rewritten to "~".
+_claude_chain_redact() {
+  local f="${CLAUDE_REDACT_SED:-$HOME/.config/claude-redact.sed}"
+  if [ -r "$f" ]; then
+    sed -u -E -e "s#${HOME}#~#g" -f "$f"
+  else
+    sed -u -e "s#${HOME}#~#g"
+  fi
+}
+
 claude_chain() {
   local log="$1"; shift
   local models rest i m
@@ -41,8 +54,12 @@ claude_chain() {
     # cancelled") before it lands in what is usually a *tracked* log — it
     # leaked into four repos' _meta/*.log and was hand-reverted 7+ times.
     # PIPESTATUS[0] preserves claude's own exit code through the filter.
+    # The output also passes through the machine-private redaction script
+    # (see _claude_chain_redact): these logs are usually tracked in public
+    # repos, and a session's prose names hosts, home paths and addresses.
     local rc=0
-    { claude "${args[@]}" "$@" 2>&1 | grep -v 'failed: Hook cancelled' >> "$log"; rc=${PIPESTATUS[0]}; } || true
+    { claude "${args[@]}" "$@" 2>&1 | grep --line-buffered -v 'failed: Hook cancelled' \
+        | _claude_chain_redact >> "$log"; rc=${PIPESTATUS[0]}; } || true
     if [ "$rc" -eq 0 ]; then
       if ! tail -c "+$((before + 1))" "$log" \
            | grep -qiE "reached your .{0,40}limit|usage limit|out of (usage )?credits"; then
