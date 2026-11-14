@@ -1,7 +1,8 @@
 ---
 name: experiments-rules
 description: Applies when editing files under experiments/.
-applies_to: ["experiments/**"]
+paths:
+  - "experiments/**"
 ---
 
 # Rules for `experiments/**`

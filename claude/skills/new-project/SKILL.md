@@ -22,27 +22,38 @@ Scaffold a new research project.
   than asking. Lit-only projects omit it and stay lean; they can
   graduate later (claude-system README, "Growing a lit repo").
 
+- `--agency-max` — set `agency: max` in the new `budget.yaml` (autonomous
+  fetch / ingest / curate; see `~/claude-system/claude/rules/agency.md`).
+  Pass it only when the user asks for max agency; the default is
+  `standard`.
+
 ## How
 
-Your decisions: the slug, whether to pass `--private`, and whether the
-project's shape implies `--experiments`. Then run the scaffold:
+Your decisions: the slug, and which of `--private`, `--experiments` and
+`--agency-max` apply. Then run the scaffold:
 
 ```bash
-bash ~/claude-system/scripts/new_project.sh <slug> [--private] [--experiments]
+bash ~/claude-system/scripts/new_project.sh <slug> [--private] [--experiments] [--agency-max]
 ```
 
 The script does the mechanical work — template copy, token
-substitution, `git`/`dvc`/`uv` init, initial commit, best-effort
+substitution, hardware hints in `budget.yaml` read from this machine,
+`git`/`dvc`/`uv` init, initial commit, best-effort
 `gh repo create` + Pages enablement (a missing/unauthenticated `gh`
 never fails the scaffold). The Pages viewer (`docs/index.html`) ships
 in the template and needs no build step.
 
 Afterwards:
 
-1. **Sync imports**: if the scaffolded `CLAUDE.md` declares
+1. **Fill in the orientation**: the scaffold leaves "What this project is
+   about" in `CLAUDE.md` and the tagline in `README.md` as placeholders.
+   Write both now from what the user asked for; `/ingest` scores
+   relevance against that section and `/digest` builds its queries from
+   the project's direction, so an empty one degrades both.
+2. **Sync imports**: if the scaffolded `CLAUDE.md` declares
    `agentic-research/concepts/` paths, run `/sync-imports`
    so the hub's concepts gain `used_by:` back-references immediately.
-2. **Report**: print the tree (depth 2), the absolute path, and the
+3. **Report**: print the tree (depth 2), the absolute path, and the
    remote / Pages URLs if created.
 
 ## Notes

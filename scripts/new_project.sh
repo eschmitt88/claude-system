@@ -5,22 +5,23 @@
 # The skill keeps the decisions (slug choice, --private, --experiments
 # inference, sync-imports); this script does the filesystem/git/gh work.
 #
-# Usage: new_project.sh <slug> [--private] [--experiments] [--no-remote]
+# Usage: new_project.sh <slug> [--private] [--experiments] [--agency-max] [--no-remote]
 # Env:   PROJECTS_ROOT (default ~/projects/research)
 #        TEMPLATE_DIR  (default ~/.claude/templates/project)
 set -euo pipefail
 
-SLUG="" PRIVATE=0 EXPERIMENTS=0 NO_REMOTE=0
+SLUG="" PRIVATE=0 EXPERIMENTS=0 NO_REMOTE=0 AGENCY_MAX=0
 for arg in "$@"; do
   case "$arg" in
     --private)     PRIVATE=1 ;;
     --experiments) EXPERIMENTS=1 ;;
     --no-remote)   NO_REMOTE=1 ;;
+    --agency-max)  AGENCY_MAX=1 ;;
     -*) echo "unknown flag: $arg" >&2; exit 2 ;;
     *)  SLUG="$arg" ;;
   esac
 done
-[ -n "$SLUG" ] || { echo "usage: new_project.sh <slug> [--private] [--experiments] [--no-remote]" >&2; exit 2; }
+[ -n "$SLUG" ] || { echo "usage: new_project.sh <slug> [--private] [--experiments] [--agency-max] [--no-remote]" >&2; exit 2; }
 case "$SLUG" in
   */*|*" "*|*..*) echo "invalid slug: $SLUG" >&2; exit 2 ;;
 esac
@@ -39,6 +40,29 @@ cd "$DEST"
 for f in README.md CLAUDE.md; do
   [ -f "$f" ] && sed -i "s/{{PROJECT_SLUG}}/$SLUG/g" "$f"
 done
+
+# budget.yaml: autonomy level, and hardware hints read from this machine.
+# The hints are what /implement hands its subagent, so a placeholder there
+# ("gpu_count: 0") is worse than nothing. Best effort: a value that can't be
+# read keeps the template's placeholder.
+if [ -f budget.yaml ]; then
+  [ "$AGENCY_MAX" = 1 ] && sed -i 's/^agency:.*/agency: max/' budget.yaml
+  gpu="$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits 2>/dev/null || true)"
+  if [ -n "$gpu" ]; then
+    gpu_name="$(printf '%s\n' "$gpu" | head -n1 | cut -d, -f1 | sed 's/^ *//; s/ *$//')"
+    gpu_mib="$(printf '%s\n' "$gpu" | head -n1 | cut -d, -f2 | tr -dc 0-9)"
+    sed -i "s|^  gpu_model:.*|  gpu_model: \"$gpu_name\"|; \
+            s|^  gpu_memory_gb:.*|  gpu_memory_gb: $(( (${gpu_mib:-0} + 512) / 1024 ))|; \
+            s|^  gpu_count:.*|  gpu_count: $(printf '%s\n' "$gpu" | wc -l)|" budget.yaml
+  else
+    sed -i 's|^  gpu_model:.*|  gpu_model: "none"|' budget.yaml
+  fi
+  ram_kb="$(awk '/^MemTotal:/ {print $2}' /proc/meminfo 2>/dev/null || true)"
+  [ -n "$ram_kb" ] && sed -i "s|^  system_ram_gb:.*|  system_ram_gb: $(( ram_kb / 1024 / 1024 ))|" budget.yaml
+  free_gb="$(df -BG --output=avail "$ROOT" 2>/dev/null | tail -n1 | tr -dc 0-9 || true)"
+  [ -n "$free_gb" ] && sed -i "s|^  storage_path:.*|  storage_path: \"$ROOT\"|; \
+                               s|^  storage_free_gb:.*|  storage_free_gb: $free_gb|" budget.yaml
+fi
 
 git init -q -b main
 command -v dvc >/dev/null 2>&1 && dvc init -q

@@ -1,7 +1,10 @@
 ---
 name: notebooks-rules
 description: Applies when editing notebooks (*.qmd, *.ipynb).
-applies_to: ["**/*.qmd", "**/*.ipynb", "notebooks/**"]
+paths:
+  - "**/*.qmd"
+  - "**/*.ipynb"
+  - "notebooks/**"
 ---
 
 # Rules for notebooks

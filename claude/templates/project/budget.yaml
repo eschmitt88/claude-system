@@ -28,7 +28,8 @@ models:
   implementer: "opus"
 
 # Hardware hints (read by /implement, surfaced to the subagent).
-# Edit every value to match your machine — these are placeholders.
+# new_project.sh fills these from the machine at scaffold time; correct
+# them if the box changes.
 hardware:
   gpu_model: "YOUR_GPU"          # e.g. "NVIDIA RTX 5080"; "none" if CPU-only
   gpu_memory_gb: 0

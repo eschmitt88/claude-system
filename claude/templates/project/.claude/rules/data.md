@@ -1,7 +1,12 @@
 ---
 name: data-rules
 description: Applies when handling data and large artifacts.
-applies_to: ["raw/**", "data/**", "**/*.parquet", "**/*.arrow", "**/*.ckpt"]
+paths:
+  - "raw/**"
+  - "data/**"
+  - "**/*.parquet"
+  - "**/*.arrow"
+  - "**/*.ckpt"
 ---
 
 # Rules for data

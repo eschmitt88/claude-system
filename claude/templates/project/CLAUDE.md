@@ -19,17 +19,15 @@ One or two sentences. Fill in when the project stops being exploratory.
 
 ## Scoped rules
 
-Detailed conventions live in `.claude/rules/` and are auto-loaded when you
-touch matching paths:
+Detailed conventions live in `.claude/rules/`. Each loads on its own when
+you read or edit a matching path (its `paths:` frontmatter): `experiments.md`
+for `experiments/**`, `notebooks.md` for notebooks, `data.md` for `raw/**`
+and data files.
 
-@.claude/rules/experiments.md
-@.claude/rules/notebooks.md
-@.claude/rules/data.md
-
-Framework rules live at `~/claude-system/claude/rules/`. They cannot be
-`@`-imported — CLAUDE.md imports resolve only inside the project tree —
-so read them at the point they apply: `evaluation.md` before designing
-or judging an evaluation, `agency.md` before an autonomous run.
+Framework rules live at `~/claude-system/claude/rules/` and load only on
+demand: read `evaluation.md` before designing or judging an evaluation,
+`agency.md` before an autonomous run. Skills that list them under
+`respects:` do this themselves.
 
 ## Budget & compute
 
@@ -52,5 +50,6 @@ down or explicitly flag the need to raise a ceiling.
 ## Housekeeping
 
 - End sessions with `/wrap`. The SessionEnd hook backstops this.
-- Use `/new-experiment <slug>` — don't hand-roll experiment folders.
+- Experiments are scaffolded by `/new-experiment <slug>` (part of the
+  experiment skill group; claude-system README, "Growing a lit repo").
 - Run `/lint` weekly.
