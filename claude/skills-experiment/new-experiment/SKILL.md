@@ -7,7 +7,7 @@ respects:
 
 # new-experiment
 
-**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
 Create a new experiment folder in the active project.
 

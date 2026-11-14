@@ -121,13 +121,20 @@ of an autonomous run; the SessionEnd auto-push is a backstop, not the
 primary mechanism. Push at each natural boundary (e.g. after each ingested
 paper), not only once at the very end, so progress is visible as it lands.
 
+Stage by path: commit the files the work wrote, never `git add -A` or
+`commit -a`. Scheduled jobs and other sessions keep these repos dirty, and
+a sweep commits their half-written state under your message.
+
 ## Hard limits that still bind under `max`
 
 Autonomy is bounded, not unbounded:
 
 - **`budget.yaml` ceilings are absolute** — `max_tokens`, `max_wall_hours`,
   `max_experiments`, `max_consecutive_no_improvement`, `max_disk_gb`. Halt
-  when any is hit, regardless of verdict.
+  when any is hit, regardless of verdict. `scripts/chain_budget.py`
+  evaluates them for `/iterate` chains. Nothing meters an ingest or curate
+  burst against them, so there the verdict and the batch-size scale above
+  are the limit.
 - **HCE still applies** — `test/` stays off-limits during search; see
   `evaluation.md`. `max` agency never licenses touching the holdout.
 - **`hold` is absolute** — a `hold` verdict (weekly quota ≥90% spent, disk

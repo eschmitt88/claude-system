@@ -113,6 +113,16 @@ ever touching `test/`. So:
 - At chain start, record the content hash of the evaluator (the script
   or function that computes `metrics.json` / `final_metrics.json`) in
   the experiment's `log.md`.
+- Also at chain start, score a do-nothing submission with the search
+  evaluator and log the score next to the hash. Use the task's sample
+  submission, a constant or majority-class prediction, or an empty
+  output. It should land at the task's floor: chance AUC, the
+  majority-class rate, the empty-output score. If it lands clearly
+  above the floor, the evaluator is reading something other than the
+  submission; fix it before the chain starts. A hash proves the
+  evaluator is unchanged, not that it is right, and a passing check
+  does not validate it either (it only rules out rewarding nothing).
+  Where a task has no defined floor, skip with a logged reason.
 - The final-scoring pass executes a **pristine copy** of the evaluator
   — from the chain-start git commit (`git show <sha>:<path>`) or a
   read-only location outside the search loop's writable tree — never

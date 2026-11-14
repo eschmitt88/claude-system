@@ -1,13 +1,13 @@
 ---
 name: ingest
-description: Ingest a file in raw/ into the knowledge graph. Proposes a literature/<kind>/<filename>.md from the matching _meta/templates/ template, identifies candidate concepts (updates existing or seeds new), updates index + log, shows diff.
+description: Ingest a file in raw/ into the knowledge graph. Writes literature/<kind>s/<filename>.md from the matching _meta/templates/ template, updates or seeds the concepts it raises, updates index + log, and commits. No confirmation gate.
 respects:
   - ~/claude-system/claude/rules/agency.md
 ---
 
 # ingest
 
-**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
 Turn a raw source into a processed literature note and seed any concepts
 it raises.
@@ -28,7 +28,7 @@ it raises.
    methods, results. For repos, scan README + top-level layout. For posts,
    read the whole thing.
 
-3. **Propose the processed note** at
+3. **Write the processed note** at
    `literature/<kind>s/<safe-filename>.md` using the matching template
    from `_meta/templates/<kind>.md`. Pre-fill:
    - `source:` → the raw path.
@@ -36,9 +36,8 @@ it raises.
    - `title`/`name`, `authors`, `year`, `venue`, `url` where visible.
    - `relevance:` → propose a 0–5 score per the rubric below, with a
      one-line justification in the `## Follow-up` section under the
-     heading `**Relevance:**`. The user overrides in the diff if they
-     disagree.
-   - `tags:` suggested from content; user can prune.
+     heading `**Relevance:**`.
+   - `tags:` suggested from content.
    - **Trust signals** (papers/repos) → fill these credibility fields,
      extracted from the source itself where possible:
      - `institutions:` → author affiliations as a list (e.g.
@@ -80,11 +79,10 @@ it raises.
    - **0** — reserved for "unscored" (do not auto-assign 0; if the
      paper is genuinely tangential, score 1).
 
-   Auto-scoring is best-effort. The skill should propose, not impose:
-   the score and justification land in the same diff batch the user
-   confirms. If the active project has no clear mission statement
-   in its `CLAUDE.md`, default to `relevance: 0` and tell the user
-   the rubric could not be applied.
+   Scores are best-effort and the recorded justification is what lets
+   the user overrule them later. If the active project has no clear
+   mission statement in its `CLAUDE.md`, default to `relevance: 0` and
+   say the rubric could not be applied.
 
    **Trust-signal rubric** — `credibility` is *independent of
    `relevance`*: a highly relevant paper can be low-credibility (an
@@ -104,64 +102,28 @@ it raises.
 
    Institution is a *prior, not a verdict* — weight reproducibility
    (released code/artifacts) and peer review at least as heavily as the
-   author's affiliation. Record the reasoning so the user can override.
+   author's affiliation.
 
 4. **Candidate concepts**: extract 1–5 atomic ideas the source raises.
    For each, check `concepts/` for an existing file by name (case- and
-   punctuation-insensitive match). If it exists, propose adding the
-   literature note to its `sources:`. Otherwise propose a new seedling
-   concept file from `_meta/templates/concept.md`.
+   punctuation-insensitive match). If it exists, add the literature
+   note to its `sources:`. Otherwise seed a new concept file from
+   `_meta/templates/concept.md`.
 
 5. **Update `_meta/index.md`** if a new MoC candidate is emerging
    (≥5 concepts in a cluster).
 
 6. **Append to `_meta/log.md`**: `YYYY-MM-DD HH:MM ingest <raw-path>`.
 
-7. **Cross-project import back-reference** (see sub-contract below).
-   Run once per `/ingest` invocation, before the diff is shown, so any
-   changes to meta-project concept files are part of the same
-   confirmation batch.
+7. **Run `/sync-imports`** so hub concepts this project declares gain
+   their `used_by:` back-references.
 
-8. **Write all proposed/modified files and commit.** Agentic
-   workflow — no confirmation gate. After writing everything in
-   the batch (literature note + concept updates + index + log +
-   cross-project back-references), run:
-
-   ```sh
-   git add -A
-   git commit -m "ingest YYYY-MM-DD: <raw-path> → <literature note>"
-   ```
-
-   Then print the commit hash. Rationale: git is the memory
-   layer per `CLAUDE.md`, and commits are reversible
-   (`git revert`), so the default is to commit. The user can
-   amend or revert after the fact.
-
-## Cross-project import back-reference — call `/sync-imports`
-
-The back-reference append logic (scan concept declarations → append
-idempotent `used_by:` entries on the meta side) lives in the
-dedicated `/sync-imports` skill. `/ingest` calls it as part of step
-7 so any concept-file modifications land in the same diff batch as
-the literature-note and local-concept changes.
-
-Specifically: in step 7, invoke `/sync-imports` on the active project
-before showing the diff. Any concept-file modifications it produces
-are added to the batch and the user confirms once; all files are
-written on confirmation or none on refusal.
-
-This was previously an inline sub-contract inside `/ingest`, which
-meant the back-reference only ran when ingesting a raw file.
-Factoring it out (Phase 6 bug 9) lets any project invoke it
-independently — useful for `/new-project` and for manual re-runs
-after editing `CLAUDE.md`.
+8. **Commit** — an artifact write, no confirmation gate. Stage the
+   files this skill wrote by path (never `git add -A`: it sweeps in
+   whatever else is dirty), commit, and push. Message:
+   `ingest YYYY-MM-DD: <raw-path> → <literature note>`.
 
 ## Notes
 
 - Never modify `raw/` itself. Treat it as read-only.
 - If the file under `raw/` is empty or unreadable, abort and tell the user.
-- The cross-project sub-contract runs even when the primary ingest
-  has no concept updates of its own (e.g. re-ingesting an existing
-  raw file to pick up a new concept declaration in CLAUDE.md). In that case,
-  the diff batch contains only meta-project concept updates plus a
-  log line.

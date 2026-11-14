@@ -8,7 +8,7 @@ respects:
 
 # digest
 
-**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
 Periodic, low-touch literature sweep. Where `/discover <topic>` is
 user-initiated and focused, `/digest` is autonomous and broad — it
@@ -16,9 +16,10 @@ re-reads the project's current direction and surfaces what's new
 since last time.
 
 Intended to be called by the `schedule` skill or a cron job (e.g.
-daily or weekly). The user is not in the loop when it fires, so the
-skill is conservative: it never ingests, never writes to `literature/`
-or `concepts/`, and never overwrites existing candidate files.
+daily or weekly). The user is not in the loop when it fires. It never
+overwrites existing candidate files, and it touches `literature/` and
+`concepts/` only through `/ingest`, and only in `agency: max` repos
+(step 8).
 
 ## Arguments
 
@@ -73,6 +74,9 @@ would be searched without writing).
 7. **Append to `_meta/log.md`**:
    `YYYY-MM-DD HH:MM digest n=<count> window_since=<iso>`.
 
+   Then commit the candidates file, `_meta/last_digest` and the log line
+   (staged by path, never `git add -A`) and push.
+
 8. **Agency auto-advance** (only in `agency: max` repos — read
    `budget.yaml`). After writing candidates, consult the headroom
    verdict and clear the backlog instead of leaving it for manual
@@ -113,7 +117,8 @@ would be searched without writing).
   `/fetch-paper` automatically** — curation is the user's job. Only the
   opt-in `agency: max` level (step 8) relaxes this, and only while the
   headroom verdict permits.
-- Do not modify `concepts/` or `literature/`.
+- Do not edit `concepts/` or `literature/` directly; step 8's `/ingest`
+  calls are the only route.
 - If no new items pass the filter, still update `_meta/last_digest`
   and write a candidates file with `n_returned: 0` — the absence of
   news is signal.

@@ -20,8 +20,10 @@ PreCompact: before compaction, persist anything load-bearing to disk.
   session, run /wrap to append Did/Findings/Next to NOTES.md now.
 - If you generated experiment results that are not yet committed to
   metrics.json or results/, write them.
-- Auto-memory is a hint, not a home — promote anything the next session
-  must see into a tracked file.
+- Standing instructions the user gave only in chat (how to commit, what
+  not to touch, what not to run) are what compaction drops most. Quote
+  the latest version of each verbatim in the summary. Anything the next
+  session must see goes in a tracked file, not auto-memory.
 EOF
 
 if [ -n "$transcript" ]; then

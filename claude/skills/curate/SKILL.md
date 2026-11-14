@@ -8,7 +8,7 @@ respects:
 
 # curate
 
-**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
 `/discover` and `/digest` *open* candidate files in `raw/_candidates/`;
 nothing *closes* them, so they accumulate and read as "uncurated" forever.
@@ -37,7 +37,10 @@ For each uncurated candidate file:
 2. **Decide a disposition per remaining item:**
    - **ingest** — on-mission and substantive (a paper, a real repo, a
      load-bearing post). Run `/fetch-paper` then `/ingest` (which fills the
-     trust-signal frontmatter). Under `agency: max`, do this autonomously,
+     trust-signal frontmatter). An entry marked `verified: snippet` (or
+     with no `verified:` field) was never read by `/discover`: check that
+     the fetched source is the work the entry describes, and note any
+     wrong ID or number in the `## Curation` section. Under `agency: max`, do this autonomously,
      gated by the headroom verdict (`claude-coordinator-agency`); under
      `standard`, propose the list and wait.
    - **decline** — a duplicate, a thin hot-take, link-rot, off-mission, or

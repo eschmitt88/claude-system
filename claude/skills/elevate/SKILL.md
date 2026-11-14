@@ -7,7 +7,7 @@ respects:
 
 # elevate
 
-**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
 The `agentic-research` repo is research-about-research: it curates
 literature and concepts on how autonomous research agents are built. Some

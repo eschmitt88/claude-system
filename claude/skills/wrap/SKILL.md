@@ -1,6 +1,6 @@
 ---
 name: wrap
-description: End-of-session discipline. Reads tail of NOTES.md to avoid duplicate date headings, appends today's dated entry with Did/Findings/Next subsections, updates _meta/index.md and _meta/log.md, shows diff, waits for confirmation.
+description: End-of-session discipline. Appends today's dated entry (Did / Findings / Next) to NOTES.md, updates _meta/index.md and _meta/log.md, commits and pushes. No confirmation gate.
 ---
 
 # wrap
@@ -16,29 +16,13 @@ Operate on the active project; refuse if the cwd isn't inside one.
    existing heading's subsections rather than creating a duplicate
    `## YYYY-MM-DD`.
 
-   Also scan recently-touched experiment READMEs for placeholder rot:
-   for any `experiments/YYYY-MM-DD-<slug>/README.md` that was modified
-   in this session OR whose frontmatter says `status: done` or
-   `status: abandoned`, grep the body for placeholder phrases:
-   `Fill in after the run`, `Fill after run`, `(post-run)`, `TBD.`
-   (with terminal period, to avoid false-positives on "TBD" as part
-   of prose), or a section heading followed only by blank lines.
-
-   If any placeholder is found, emit a clear soft warning to the
-   user in chat:
-
-   > ⚠ Experiment README has placeholder body content:
-   > - experiments/<slug>/README.md: `## Result` still says "Fill in after the run"
-   > - experiments/<other>/README.md: `## Diagnostics` still says "TBD"
-   >
-   > Consider populating before wrap (`/wrap` will proceed anyway).
-
-   This is INFORMATIONAL — do NOT block the wrap. The user opted
-   into soft-warning behavior; respect that. But populating the
-   bodies before continuing is the right thing to do when the
-   experiment actually completed; otherwise the wrap commits a
-   `status: done` README with an empty `## Result` section, which
-   future readers (or `/lint`) will then have to chase down.
+   Also check experiment READMEs touched this session, or marked
+   `status: done` / `abandoned`, for placeholder bodies: `Fill in after
+   the run`, `Fill after run`, `(post-run)`, `TBD.`, or a heading with
+   nothing under it. Name each file and section in chat as a warning and
+   fill them in if the experiment did finish. The warning never blocks
+   the wrap (the user chose a soft warning), but a `status: done` README
+   with an empty `## Result` is a gap someone has to chase later.
 
 2. **Draft the entry** based on the conversation so far:
 
@@ -69,10 +53,7 @@ Operate on the active project; refuse if the cwd isn't inside one.
    greppable. Leave a field as `"unclear"` or `"n/a"` rather than
    omitting it.
 
-   **If the session was NOT inside an experiment folder**, skip the
-   Structured block entirely. Instead, append one line to
-   `_meta/log.md`:
-   `YYYY-MM-DD HH:MM wrap-skip-structured reason=<cwd-not-in-experiment>`.
+   Outside an experiment folder, skip this block.
 
 4. **Update `_meta/index.md`**: if new experiments started or finished,
    reflect that in the "Active experiments" section.
@@ -80,8 +61,9 @@ Operate on the active project; refuse if the cwd isn't inside one.
 5. **Append to `_meta/log.md`**: one line,
    `YYYY-MM-DD HH:MM wrap <one-line-summary>`.
 
-6. **Write the changes, commit, and print the commit hash** — an
-   artifact write, so no confirmation gate.
+6. **Write, commit, and push** — an artifact write, no confirmation gate.
+   Stage `NOTES.md`, `_meta/index.md` and `_meta/log.md` by path (never
+   `git add -A`).
 
 ## Why enforce this
 

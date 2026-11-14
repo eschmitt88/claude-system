@@ -1,6 +1,6 @@
 ---
 name: iterate
-description: One propose→implement loop cycle per invocation. Reads the latest implemented experiment's Diagnostics section, picks the strongest next_candidate, runs the /propose logic seeded with that candidate, presents the proposal, and pauses for user approval. On approval calls /implement. --experiment <path> targets a specific experiment; --chain <N> repeats up to N times without pausing; --chain-until <cond> halts on a budget / metric / count threshold; --ensemble <slug...> [--strategy auto|voting|stacking|averaging] runs a single combination cycle over completed experiments sharing a metric (kind: ensemble, members: frontmatter). Reads budget.yaml as implicit halting conditions each cycle. Appends every cycle to _meta/iteration_log.md.
+description: One propose→implement loop cycle per invocation. Reads the latest implemented experiment's Diagnostics section, picks the strongest next_candidate, runs the /propose logic seeded with that candidate, presents the proposal, and confirms it per agency.md's Confirmation principle (pause under standard, continue under max) before calling /implement. --experiment <path> targets a specific experiment; --chain <N> repeats up to N times without pausing; --chain-until <cond> halts on a budget / metric / count threshold; --ensemble <slug...> [--strategy auto|voting|stacking|averaging] runs a single combination cycle over completed experiments sharing a metric (kind: ensemble, members: frontmatter). Reads budget.yaml as implicit halting conditions each cycle. Appends every cycle to _meta/iteration_log.md.
 respects:
   - ~/claude-system/claude/rules/evaluation.md
   - ~/claude-system/claude/rules/agency.md
@@ -8,7 +8,7 @@ respects:
 
 # iterate
 
-**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
 Drive the propose → implement → diagnose loop one step at a time, or
 in a chain under explicit halting conditions.
@@ -75,10 +75,12 @@ Between cycles, read **only** each completed experiment's
    use the candidate text as the focus argument. Produce the proposal
    file exactly as `/propose` would.
 
-5. **Present the proposal** and **pause for user approval**.
+5. **Present the proposal.** Choosing it is hypothesis selection
+   (`agency.md`, Confirmation principle): pause for approval under
+   `agency: standard`; continue under `agency: max` when the verdict is
+   not `hold`.
 
-6. **On approval, call `/implement <proposal-path>`**. Relay its
-   summary.
+6. **Call `/implement <proposal-path>`** and relay its summary.
 
 7. **Append one line to `_meta/iteration_log.md`** — create the file
    with a short header if missing:
@@ -86,6 +88,8 @@ Between cycles, read **only** each completed experiment's
    ```
    YYYY-MM-DD HH:MM  <seed-slug>  →  <proposal-slug>  →  <experiment-slug>  Δ<metric>=<delta> band=<std|none>  budget{wall=<h>,tokens=<t>,experiments=<n>}
    ```
+
+   On a pivot cycle (below), append ` redirect=<axis>`.
 
 ## Steps (`--chain` / `--chain-until` mode)
 
@@ -120,6 +124,19 @@ has no band, so a strictly positive delta counts as an improvement and the
 log line says `band=none`. Reset the counter only on an improvement beyond
 the band. A "new best" inside the band is a coin flip, and counting it
 stops `max_consecutive_no_improvement` from ever firing.
+
+**Pivot before the stall halt.** When the counter is one below
+`max_consecutive_no_improvement`, the next cycle must change the axis,
+not refine it. In step 3, reject any candidate that keeps the stalled
+cycles' backbone, representation, objective and validation scheme. Pick
+one that changes at least one of them, or reopen a `next_candidate` an
+earlier cycle in this chain passed over, and name the changed axis in
+one sentence. Judge the pivot against the chain's best, under the same
+band; if it also fails to improve, the counter reaches the ceiling and
+the chain halts as before. With a ceiling of 1, or no `budget.yaml`,
+there is no pivot cycle. (Agents left alone refine the stalled axis:
+expert humans pivot on ~25% of transitions, single-loop agents on ~9%,
+and a "consider something different" nudge does not close the gap.)
 
 If budget.yaml is missing (`budget_present: false`), chain on explicit
 `--chain N` / `--chain-until` only; log a warning on the first cycle.

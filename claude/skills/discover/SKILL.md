@@ -8,10 +8,10 @@ respects:
 
 # discover
 
-**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
 Surface candidate reading on a topic. The goal is a short, ranked list
-the user can curate — a triage, not a library dump.
+for `/curate` (or the user) to act on — a triage, not a library dump.
 
 Motivated by MLE-STAR (arXiv 2506.15692) and related work finding that
 web-retrieval-grounded agents consistently outperform agents relying
@@ -34,7 +34,9 @@ stale; the web is not.
    topic. When a result is plausibly relevant, use `WebFetch` to pull
    enough of the page to write a defensible one-line summary. Prefer
    primary sources (arXiv abstract pages, GitHub READMEs, original
-   blog posts) over aggregators.
+   blog posts) over aggregators. Record per entry whether you read the
+   page or only a search snippet: snippet-only numbers and arXiv IDs are
+   often wrong, and `/curate` needs to know which to re-check.
 
 3. **Rank**. Use your judgment. What matters: recency, fit to the
    stated topic, fit to the project's current direction (skim
@@ -68,30 +70,23 @@ stale; the web is not.
    - type: paper | repo | post | talk
    - summary: <one sentence>
    - reason: <one sentence on why this made the cut for this project>
+   - verified: page | snippet
    ```
 
-5. **Write the triage file.** Agentic workflow — no confirmation
-   gate.
-
-6. **Append to `_meta/log.md`**:
+5. **Append to `_meta/log.md`**:
    `YYYY-MM-DD HH:MM discover <topic-slug> n=<count>`.
 
-7. **Commit.** After writing the triage file and the log line, run:
-
-   ```sh
-   git add -A
-   git commit -m "discover YYYY-MM-DD: <topic-slug> n=<count>"
-   ```
-
-   Then print the commit hash. Rationale: git is the memory
-   layer per `CLAUDE.md`, and commits are reversible
-   (`git revert`).
+6. **Commit** — an artifact write, no confirmation gate. Stage the
+   files this skill wrote by path (never `git add -A`: it sweeps in
+   whatever else is dirty), commit, and push. Message:
+   `discover YYYY-MM-DD: <topic-slug> n=<count>`. When several
+   `/discover` runs share a repo at once, the caller commits for all of
+   them instead (parallel commits race on the index).
 
 ## What this skill does NOT do
 
-- Does not download full PDFs. That is `/fetch-paper`'s job — the user
-  curates this list and then invokes `/fetch-paper` on the entries
-  they want to read.
+- Does not download full PDFs. That is `/fetch-paper`'s job, run on the
+  entries that survive curation.
 - Does not create a standing obligation. In an `agency: standard` repo
   the candidates file is a triage note to use if and when useful —
   `/lint` tracks backlog staleness only in `agency: max` repos, where
@@ -104,9 +99,8 @@ stale; the web is not.
 
 ## Notes
 
-- `raw/_candidates/` is a staging area, not permanent storage.
-  `/lint` flags candidates files older than 14 days — either curate
-  them into `/fetch-paper`-able URLs or delete.
+- `raw/_candidates/` is a staging area, not permanent storage; `/curate`
+  archives a resolved file to `raw/_candidates/_done/`.
 - If `N` is very large, consider delegating the search to the
   Explore agent to keep the main context clean. The triage file is
   still written by the main agent.

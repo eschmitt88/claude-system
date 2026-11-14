@@ -7,7 +7,7 @@ respects:
 
 # promote-moc
 
-**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
 Turn an accumulating cluster of concepts into a navigable Map of Content.
 The framework's rule (user `CLAUDE.md`): "when >=5 related concepts
@@ -69,9 +69,9 @@ restraint is the point: the value is in real structure, not MoC count.
 
 6. **Persist** per `~/claude-system/claude/rules/agency.md`:
    - **`agency: standard`** — show the diff and wait for confirmation.
-   - **`agency: max`** — write, then `git add -A && git commit && git push`
-     (so the Pages site updates). Commit message:
-     `promote-moc YYYY-MM-DD: <theme> (<N> concepts)`.
+   - **`agency: max`** — write, then stage the files you changed by path
+     (never `git add -A`), commit, and push so the Pages site updates.
+     Commit message: `promote-moc YYYY-MM-DD: <theme> (<N> concepts)`.
 
 ## Notes
 

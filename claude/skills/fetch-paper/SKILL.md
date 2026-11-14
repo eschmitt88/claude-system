@@ -8,7 +8,7 @@ respects:
 
 # fetch-paper
 
-**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
 Pull a primary source into the project's `raw/` tree and hand off to
 `/ingest`. The skill is idempotent — running it twice on the same
@@ -67,19 +67,11 @@ input leaves the filesystem unchanged the second time.
 7. **Append to `_meta/log.md`**:
    `YYYY-MM-DD HH:MM fetch-paper <input> → <raw-path>`.
 
-8. **Commit the raw fetch.** Agentic workflow — no confirmation
-   gate. After the chained `/ingest` completes (or directly after
-   step 7 if `/ingest` will run separately), run:
-
-   ```sh
-   git add -A
-   git commit -m "fetch-paper YYYY-MM-DD: <raw-path>"
-   ```
-
-   Then print the commit hash. Note: when `/ingest` is chained,
-   it will issue its own commit covering the literature/concept
-   updates. The fetch-paper commit covers only the raw addition;
-   the two commits together tell the full provenance story.
+8. **Commit the raw fetch** — an artifact write, no confirmation gate.
+   Stage the raw file and the log line by path (never `git add -A`),
+   commit, and push. Message: `fetch-paper YYYY-MM-DD: <raw-path>`. The
+   chained `/ingest` makes its own commit for the literature and concept
+   changes.
 
 ## Constraints
 

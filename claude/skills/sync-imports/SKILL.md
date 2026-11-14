@@ -85,18 +85,18 @@ action. The meta project doesn't back-reference itself.
    not found") and skip the append. Do not fabricate the file.
 
 7. **Write the back-references** — an artifact write (bookkeeping, not
-   hypothesis selection), so no confirmation gate; show the diff of
-   what changed. When called by `/ingest` or `/new-project`, the parent
-   skill batches these into its own diff.
+   hypothesis selection), so no confirmation gate. The changed files are
+   in the hub repo, not the active project: commit them there, staged by
+   path (never `git add -A` — the hub's scheduled jobs keep it dirty),
+   and push. Skip the commit when nothing changed.
 
 ## Notes
 
 - This skill **modifies files outside the active project**. That's
   unusual and deliberate — it's the one skill whose job is to update
   the meta project from downstream signals.
-- The `/ingest` skill calls `/sync-imports` as part of its diff batch
-  (step 7 of `/ingest`). `/new-project` calls it right after the
-  initial commit so back-references land immediately.
+- `/ingest` calls `/sync-imports` as its step 7. `/new-project` calls it
+  right after the initial commit so back-references land immediately.
 - Long-term, consider running `/sync-imports` from a PostToolUse hook
   on CLAUDE.md edits. Not worth the complexity until it's proven
   useful.

@@ -1,16 +1,17 @@
 ---
 name: implement
-description: Execute a proposal inside a fresh subagent — the MLE-IDEATOR separation boundary and the only skill allowed to spawn a subagent. The subagent runs /new-experiment, writes code + config.yaml, executes dvc exp run, captures metrics and results, then writes a structured Diagnostics section to README.md. On success, files the proposal under experiments/_proposals/_done/ with status: implemented; on hard failure, files it under _proposals/_failed/ with the captured error. Supports --seeds N for pass@k multi-seed runs and --implementer-model <slug> to pick the subagent model (default from budget.yaml).
+description: Execute a proposal inside a fresh subagent — the MLE-IDEATOR separation boundary, and the only subagent in the experiment loop. The subagent runs /new-experiment, writes code + config.yaml, executes dvc exp run, captures metrics and results, then writes a structured Diagnostics section to README.md. On success, files the proposal under experiments/_proposals/_done/ with status: implemented; on hard failure, files it under _proposals/_failed/ with the captured error. Supports --seeds N for pass@k multi-seed runs and --implementer-model <slug> to pick the subagent model (default from budget.yaml).
 respects:
   - ~/claude-system/claude/rules/evaluation.md
 ---
 
 # implement
 
-**First, Read every file listed under `respects:` in the frontmatter.** Framework rules are not auto-loaded — CLAUDE.md `@` imports cannot reach outside the project tree — so this Read is the only way they enter context.
+**First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
-Turn a proposal into a run. This is the **only** skill in the framework
-that is allowed to spawn a subagent.
+Turn a proposal into a run. This is the only point in the experiment
+loop that spawns a subagent: the implementer sees the proposal and the
+rules, and none of the ideation that led to it.
 
 ## Arguments
 
@@ -102,6 +103,13 @@ that is allowed to spawn a subagent.
    - **Do not write to `_meta/log.md`.** The main agent owns logging
      and will append the canonical line after you return.
    - Return a ≤200-word summary to the parent. Do not dump logs.
+
+   If the resolved implementer is a smaller model than the one writing
+   the proposal (a `haiku`/`sonnet` implementer under an Opus or Fable
+   ideator), add what a peer would work out alone: the entry point to
+   write, the exact command that produces `metrics.json`, and where
+   each required output goes. Smaller models lose more from an
+   unstated step than a peer does.
 
 4. **Spawn exactly one subagent** via the Agent tool (subagent_type:
    `general-purpose`), passing the resolved model slug via the `model`

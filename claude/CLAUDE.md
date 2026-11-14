@@ -41,20 +41,19 @@ only when the user asks; branch first on the default branch").
 - Keep commits logically scoped with clear messages; respect `.gitignore` and
   the DVC/SN850X boundary (never commit large artifacts — `model.pt`,
   parquet, datasets — into git).
+- **Stage by path**, not `git add -A` / `commit -a`: scheduled jobs and
+  other sessions leave these repos dirty, and a sweep commits their
+  half-written state under your message.
 - Judgment still applies: don't commit secrets, half-broken WIP that doesn't
   build, or someone else's uncommitted state swept in by accident. When a
   change is genuinely risky or ambiguous, flag it instead of committing.
 
 ## Experiments
 
-Every experiment is a folder at `experiments/YYYY-MM-DD-<slug>/` with:
-
-- `README.md` — hypothesis + result, written before and updated after.
-- `config.yaml` — inputs, hyperparameters, seeds.
-- `notes.qmd` — running Quarto notebook (analysis, plots).
-- `results/` — outputs (tracked by DVC if large).
-- `log.md` — chronological log of what was run and observed.
-- `metrics.json` — numeric results, tracked by DVC.
+Every experiment is a folder at `experiments/YYYY-MM-DD-<slug>/`, scaffolded
+by `/new-experiment`: hypothesis and result in `README.md`, inputs and seeds
+in `config.yaml`, analysis in `notes.qmd`, a chronological `log.md`, numbers
+in `metrics.json`, outputs under `results/`.
 
 DVC tracks data and model artifacts. Git tracks code, configs, and notes.
 
@@ -81,11 +80,10 @@ DVC tracks data and model artifacts. Git tracks code, configs, and notes.
 
 The HCE evaluation discipline and the agency (autonomous-spend) levels
 live at `~/claude-system/claude/rules/{evaluation,agency}.md`. They are
-not loaded globally, and `@` imports can't reach them (imports resolve
-only inside the project tree), so they are read on demand: every skill
-that lists them under `respects:` Reads them first, and outside a skill,
-read `evaluation.md` before designing or judging an evaluation and
-`agency.md` before an autonomous run.
+not loaded globally (they would cost context in every repo), so they are
+read on demand: every skill that lists them under `respects:` Reads them
+first, and outside a skill, read `evaluation.md` before designing or
+judging an evaluation and `agency.md` before an autonomous run.
 
 ## Knowledge graph hygiene
 
@@ -104,6 +102,24 @@ read `evaluation.md` before designing or judging an evaluation and
   decisions.
 - Worktrees go under `~/projects/research/<slug>/.worktrees/`, not
   alongside the main checkout.
+
+## Writing instructions for another model
+
+This covers subagent briefs, skills, rules, hook text and scheduled-job
+prompts. The reader is as capable as you and knows nothing you haven't
+written down. The evidence behind each line, and the rest of the guide, is
+at `~/projects/research/intent-briefing/docs/writing-guide.md`; read it
+before writing or rewriting a skill.
+
+- **State what the reader won't do by default**: conditional requirements,
+  the shape of what to send back, scope limits, what you already ruled
+  out. Leave out what it would do anyway.
+- **Give the outcome, when to stop, and constraints with their reasons.**
+  Spell out steps only where the order is itself the requirement.
+- **A rule that must hold goes in code** (a hook, a script, a typed check),
+  not in prose of any style.
+- **A cheaper reader gets more structure.** Brief a Sonnet or Haiku subagent
+  more explicitly than you would a peer.
 
 ## Shared box — plan compute around scheduled jobs
 
@@ -151,11 +167,3 @@ detect off-the-rails runs faster than a human — use it.
 - `dvc` for data, model, and large-result tracking.
 - `uv` for Python environments (`.venv/` is gitignored).
 - `quarto` for `.qmd` notebooks.
-
-## What not to do
-
-- Don't put experiment artifacts in `~/` — they go on the SN850X.
-- Don't edit `raw/` after ingest — re-ingest instead.
-- Don't rely on auto-memory for anything a future session must see —
-  write it to a tracked file.
-- Don't let project `CLAUDE.md` grow past 80 lines — split into rules.
