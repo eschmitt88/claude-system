@@ -1,28 +1,20 @@
-# Hard ceilings for autonomous runs. Chain halts when any is hit.
-# Enforcement is between actions: a tripped ceiling stops the NEXT
-# call, never the one in flight, so real spend overshoots the ceiling
-# by up to one worst-case call (40% overshoot measured in the wild).
-# Size each ceiling 10-15% below your true tolerance so ceiling plus
-# overshoot still lands inside it.
-# Sized for a Max plan box running the latest Opus for both roles.
+# Hard ceilings for autonomous runs; a chain halts when any is hit.
+# A tripped ceiling stops the NEXT call, not the one in flight, so real
+# spend overshoots by up to one call (40% measured in the wild). Size each
+# ceiling 10-15% below your true tolerance.
 max_wall_hours: 24
 max_tokens: 5000000
 max_experiments: 20
 max_consecutive_no_improvement: 3
 max_disk_gb: 500
 
-# Autonomy level. "standard" (default) = propose and wait for confirmation.
-# "max" = fetch / ingest / propose / iterate autonomously while the
-# coordinator's agency verdict permits and the ceilings above hold — use
-# `claude-coordinator-agency` to gauge token + hardware headroom.
-# See ~/claude-system/claude/rules/agency.md.
+# standard = propose and wait. max = act while the coordinator's verdict
+# permits and the ceilings above hold (~/claude-system/claude/rules/agency.md).
 agency: standard
 
-# Model roles. Skills read these as the defaults; CLI flags override per-call.
-# "opus" is a floating alias that resolves to the latest Opus release, so this
-# tracks new Opus versions without edits. Pin a concrete slug (e.g.
-# "claude-opus-4-8") for a specific role if you need reproducibility, or drop
-# to "haiku"/"sonnet" for a cheaper implementer.
+# Model roles: skill defaults, overridden by CLI flags. An alias floats to
+# the latest release; pin a concrete ID for reproducibility, or use
+# haiku/sonnet for a cheaper implementer.
 models:
   ideator: "opus"
   implementer: "opus"

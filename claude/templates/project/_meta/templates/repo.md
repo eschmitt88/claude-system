@@ -5,7 +5,8 @@ url:
 commit:
 source: "{{RAW_PATH}}"
 added: "{{DATE}}"
-relevance: 0
+relevance: 0        # 0-5, how load-bearing for this project
+credibility: 0      # 0-5, trust in the source — independent of relevance
 status: scanned     # scanned | explored | used
 related_experiments: []
 related_concepts: []

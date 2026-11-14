@@ -1,13 +1,13 @@
 # Project: {{PROJECT_SLUG}}
 
-Short orientation only. User-level `~/.claude/CLAUDE.md` holds the durable
-principles; this file refines them for this project.
+Orientation only. `~/.claude/CLAUDE.md` holds the durable principles; this
+file refines them for this project.
 
 ## What this project is about
 
-One or two sentences. Fill in when the project stops being exploratory.
+One or two sentences. `/ingest` scores relevance against this section.
 
-## Layout (see user CLAUDE.md for the full rationale)
+## Layout
 
 - `raw/` — immutable source material. Read only.
 - `literature/` — processed notes on papers, repos, posts.
@@ -17,12 +17,12 @@ One or two sentences. Fill in when the project stops being exploratory.
 - `journal/` — daily session files (hook-written).
 - `_meta/` — index, log, templates.
 
-## Scoped rules
+## Rules
 
-Detailed conventions live in `.claude/rules/`. Each loads on its own when
-you read or edit a matching path (its `paths:` frontmatter): `experiments.md`
-for `experiments/**`, `notebooks.md` for notebooks, `data.md` for `raw/**`
-and data files.
+`.claude/rules/` holds scoped conventions. Each loads when you read or edit
+a matching path (its `paths:` frontmatter): `experiments.md` for
+`experiments/**`, `notebooks.md` for notebooks, `data.md` for `raw/**` and
+data files.
 
 Framework rules live at `~/claude-system/claude/rules/` and load only on
 demand: read `evaluation.md` before designing or judging an evaluation,
@@ -31,13 +31,10 @@ demand: read `evaluation.md` before designing or judging an evaluation,
 
 ## Budget & compute
 
-Autonomous runs read `budget.yaml` at this project's root for hard
-ceilings (wall time, tokens, disk) and model roles (ideator vs
-implementer). Before proposing anything with non-trivial resource
-demands — multi-hour training, large downloads, many seeds — read
-`budget.yaml` and make sure the ask fits under the remaining headroom.
-If it doesn't fit, say so in the proposal's `risks:` and either scope
-down or explicitly flag the need to raise a ceiling.
+`budget.yaml` sets the hard ceilings (wall time, tokens, disk), the
+autonomy level and the model roles. Anything with real resource demands
+has to fit under it. If it doesn't, say so and scope down, or flag the
+ceiling.
 
 @budget.yaml
 
