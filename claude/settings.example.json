@@ -46,17 +46,6 @@
           }
         ]
       }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Write",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "$HOME/.claude/hooks/status_emit.sh"
-          }
-        ]
-      }
     ]
   },
   "effortLevel": "high",

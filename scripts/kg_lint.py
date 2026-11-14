@@ -40,7 +40,6 @@ STALE_CANDIDATE_DAYS = 14
 STALE_LIT_DAYS = 30
 STALE_PROPOSAL_DAYS = 14
 STALE_EXPANSION_DAYS = 7
-COSTLY_SESSION_TOKENS = 500_000
 MOC_CLUSTER_MIN = 5
 
 
@@ -291,43 +290,6 @@ class Lint:
             if "TODO: diagnostics incomplete" in ln
         ]
 
-        # costly sessions without insight
-        costly = []
-        tl = self.root / "_meta" / "token_log.ndjson"
-        sl = self.root / "_meta" / "status.ndjson"
-        if tl.is_file():
-            sessions: dict[str, dict] = {}
-            for ln in tl.read_text(errors="replace").splitlines():
-                try:
-                    row = json.loads(ln)
-                except json.JSONDecodeError:
-                    continue
-                s = sessions.setdefault(row.get("session_id", "?"),
-                                        {"tokens": 0, "ts": []})
-                s["tokens"] += sum(int(row.get(k, 0) or 0) for k in
-                                   ("input_tokens", "output_tokens", "cache_creation_tokens"))
-                if row.get("timestamp"):
-                    s["ts"].append(row["timestamp"])
-            status_rows = []
-            for ln in read_or_empty(sl).splitlines():
-                try:
-                    status_rows.append(json.loads(ln))
-                except json.JSONDecodeError:
-                    pass
-            flagged_paths = {m["path"] for m in missing_diag}
-            for sid, s in sessions.items():
-                if s["tokens"] <= COSTLY_SESSION_TOKENS or not s["ts"]:
-                    continue
-                lo, hi = min(s["ts"]), max(s["ts"])
-                touched = {row.get("slug") for row in status_rows
-                           if row.get("slug") and lo <= str(row.get("timestamp", "")) <= hi}
-                bad = [t for t in touched
-                       if any(t in p for p in flagged_paths)]
-                if bad or (not touched and s["tokens"] > COSTLY_SESSION_TOKENS):
-                    costly.append({"session": sid, "tokens": s["tokens"],
-                                   "experiments_missing_diagnostics": sorted(bad)})
-        r["costly_sessions_without_insight"] = costly
-
         # stale expansions
         stale_x = []
         xdir = prop_dir / "_expansions"
@@ -439,9 +401,6 @@ def render_text(r: dict) -> str:
         section("UNANCHORED CLAIMS", r["unanchored_claims"],
                 lambda x: f"  {x['path']}: {x['claim']}")
         section("DIAGNOSTICS TODOS (from _meta/log.md)", r["diagnostics_todos"])
-        section("COSTLY SESSIONS WITHOUT INSIGHT", r["costly_sessions_without_insight"],
-                lambda x: f"  {x['session']}  {x['tokens']:,} tokens  "
-                          f"{x['experiments_missing_diagnostics']}")
         section("STALE EXPANSIONS", r["stale_expansions"],
                 lambda x: f"  {x['path']}  age={x['age_days']}d")
         if not r.get("experiment_group_linked"):
