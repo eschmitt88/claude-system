@@ -13,10 +13,10 @@ framework-level tour of every part and how they connect (source:
 |---|---|
 | `claude/CLAUDE.md` | Durable user instructions (symlinked to `~/.claude/CLAUDE.md`). |
 | `claude/settings.example.json` | Scrubbed Claude Code settings (hooks, permissions). The live `~/.claude/settings.json` is a private real file, seeded from this once. |
-| `claude/rules/` | Scoped rules auto-loaded by path (e.g. `evaluation.md` = HCE discipline). |
+| `claude/rules/` | Framework rules (`evaluation.md` = HCE discipline, `agency.md` = autonomy levels). Not loaded globally: skills that list one under `respects:` Read it first. |
 | `claude/skills/` | Global slash-command skills — the knowledge-base group (`/discover`, `/ingest`, `/curate`, `/lint`, `/headroom`, `/jobs`, …), loaded in every project. |
 | `claude/skills-experiment/` | The experiment-loop group (`/propose`, `/implement`, `/iterate`, `/new-experiment`, `/derive-experiment`) — **not** global; linked per-project via `<project>/.claude/skills` (see "Growing a lit repo" below). |
-| `claude/hooks/` | Lifecycle hooks (`SessionStart`, `Stop` = token logger, `PreToolUse` = safety net). |
+| `claude/hooks/` | Lifecycle hooks: `SessionStart` (box schedule + NOTES tail), `PreCompact`, `Stop` (token logger), `SessionEnd` (journal, auto-push), and the status line. |
 | `claude/templates/` | Project and note templates copied by `/new-project` / `/ingest`. |
 | `coordinator/` | Python package. `state.db` schema + writers, hardware poller, **job ledger** (schedule-aware headroom: inventory of timer/cron jobs, learned GPU/RAM/CPU footprints, forecast, window search, attributed launcher) and its **capacity gate** (systemd drop-ins that make heavy jobs wait for room; see `docs/decisions/0002`), agency verdict. |
 | `registry/` | Service & port registry template (`services.example.yaml` → copy to untracked `services.yaml`); optional job annotations (`jobs.example.yaml` → `~/.claude/jobs.yaml`). |
@@ -150,8 +150,8 @@ systemctl --user status claude-dashboard.service claude-hw-poller.timer
 ### Framework (Phases 1–5)
 
 Skills follow a `propose → implement → iterate → ensemble` loop driven
-by a user in Claude Code. `/propose` does ideation; `/implement` is the
-only skill that spawns a subagent; `/iterate` drives chain cycles.
+by a user in Claude Code. `/propose` does ideation; `/implement` runs
+the proposal in the loop's one subagent; `/iterate` drives chain cycles.
 Experiments live at `~/projects/research/<project>/experiments/YYYY-MM-DD-<slug>/`
 with a standard layout (README, config.yaml, metrics.json, results/,
 splits.yaml where applicable). See individual `SKILL.md` files for
@@ -160,8 +160,8 @@ contracts.
 The `agentic-research` project is the meta-hub: downstream projects
 declare the `concepts/` they depend on, and `/sync-imports` appends
 `used_by:` back-references. The declaration is a dependency record, not
-a context load — Claude Code `@` imports resolve only inside the project
-tree, so a hub concept never enters a downstream session automatically.
+a context load: a hub concept enters a downstream session only when the
+session reads it by path.
 
 ### Standalone GitHub presence (per-project Pages)
 
@@ -200,7 +200,9 @@ instead, which renders the same directory convention.
 
 A single sqlite database at `~/.claude/state.db` tracks:
 
-- **Claude quota** — tokens consumed in the current 5h and weekly windows.
+- **Claude quota** — per-turn token spend (the Stop hook, deduped per
+  response and including subagents), alongside the quota % Anthropic reports
+  to the status line.
 - **Hardware** — GPU/CPU/RAM/disk samples (30s cadence).
 
 Skills consult the coordinator via `/headroom`. (An admission layer —
@@ -224,9 +226,9 @@ behavior. See `claude/rules/agency.md`.
 
 FastAPI app bound to `CLAUDE_DASHBOARD_BIND` (default `0.0.0.0:8080`,
 i.e. reachable on the LAN at `http://<host>:8080`). Views: `/`
-(live now — loop sessions, live gauges, quota meters), `/queue`
-(coordinator queue), `/project/<name>` (per-project cycle table +
-DIAGNOSTICS). Auto-refreshes via SSE. Runs as a systemd user unit.
+(live now — sessions, live gauges, quota meters), `/jobs` (job ledger
+and gate queue), `/ports` (service registry), `/project/<name>`
+(per-project cycle table + Diagnostics). Auto-refreshes via SSE. Runs as a systemd user unit.
 
 ## Growing a lit repo into an experimenting one
 
@@ -254,6 +256,17 @@ serve this repo's reading or start a new line of work:
 
 `/lint` warns when a repo has dated experiment folders but no linked
 experiment-loop group.
+
+## Tests
+
+```sh
+bash scripts/tests/smoke.sh                                    # scripts, hooks, scaffold, docs drift
+coordinator/.venv/bin/python scripts/tests/test_jobs.py        # job ledger units
+```
+
+The smoke test also checks that the system map (`docs/index.html`) names
+exactly the skills, hooks and CLIs that exist, so the map cannot drift
+silently when one is added or removed.
 
 ## Contributing / editing
 

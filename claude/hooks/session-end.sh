@@ -157,18 +157,19 @@ except Exception:
       fi
 
       if [ "$have_changes" -eq 1 ] || [ "$have_unpushed" -eq 1 ]; then
-        # Append-with-header to a rolling err file. Truncating on every
-        # attempt destroyed the diagnostic trail across intermittent
-        # failures — now you can read the whole history.
+        # Failures append, with a header, to a rolling err file so the
+        # trail survives intermittent failures. Successful attempts write
+        # nothing (a quiet git prints progress to stderr, so stderr is
+        # buffered per attempt and kept only when the attempt failed).
         push_err="$HOME/.claude/hooks/auto-push.err"
-        printf '\n=== %s %s %s ===\n' "$date_local" "$time_local" "$(basename "$root")" >> "$push_err" 2>/dev/null || true
+        attempt_err="$(mktemp)"
 
         commit_ok=1
         if [ "$have_changes" -eq 1 ]; then
           # no hostname: these commits land in public repos too
           msg="session: $(date +%F)"
-          if ! { git -C "$root" add -A 2>>"$push_err" \
-                 && git -C "$root" commit -m "$msg" 2>>"$push_err"; }; then
+          if ! { git -C "$root" add -A 2>>"$attempt_err" \
+                 && git -C "$root" commit -m "$msg" 2>>"$attempt_err"; }; then
             commit_ok=0
           fi
         fi
@@ -183,7 +184,7 @@ except Exception:
         push_ok=1
         if [ "$commit_ok" -eq 1 ]; then
           if ! GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5" \
-               timeout 30 git -C "$root" push 2>>"$push_err"; then
+               timeout 30 git -C "$root" push 2>>"$attempt_err"; then
             push_ok=0
           fi
         else
@@ -191,6 +192,8 @@ except Exception:
         fi
 
         if [ "$push_ok" -ne 1 ]; then
+          { printf '\n=== %s %s %s ===\n' "$date_local" "$time_local" "$(basename "$root")"
+            cat "$attempt_err"; } >> "$push_err" 2>/dev/null || true
           if [ "$have_changes" -eq 0 ] && [ "$have_unpushed" -eq 1 ]; then
             reason="retry of unpushed commits failed"
           else
@@ -199,6 +202,7 @@ except Exception:
           printf '%s %s auto_push %s (see %s)\n' \
             "$date_local" "$time_local" "$reason" "$push_err" >> "$root/_meta/log.md"
         fi
+        rm -f "$attempt_err"
       fi
     fi
   fi

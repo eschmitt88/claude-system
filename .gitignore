@@ -30,6 +30,10 @@ registry/services.yaml
 # Reusable, secret-free logic belongs in claude/lib/ instead. See README.
 claude/schedule/
 
+# Skills the Claude apps sync into ~/.claude/skills/ (which is a link into
+# this repo). Third-party, licensed, and not this repo's to publish.
+claude/skills/synced/
+
 # OS / editor
 .DS_Store
 *.swp

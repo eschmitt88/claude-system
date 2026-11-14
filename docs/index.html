@@ -112,9 +112,9 @@
     <span class="pill">single source of truth</span>
   </div>
   <div class="kpi">
-    <div><b>17</b><small>skills</small></div>
-    <div><b>6</b><small>lifecycle hooks</small></div>
-    <div><b>5</b><small>coordinator CLIs</small></div>
+    <div><b id="kpi-skills">18</b><small>skills</small></div>
+    <div><b id="kpi-hooks">5</b><small>hooks</small></div>
+    <div><b id="kpi-clis">6</b><small>coordinator CLIs</small></div>
     <div><b>1</b><small>sqlite state.db</small></div>
   </div>
 </header>
@@ -131,8 +131,8 @@
     <div class="layer">
       <div class="lh">Layer 1 — the framework · <span class="mono">~/claude-system</span> (this repo)</div>
       <div class="row">
-        <div class="box acc"><b>claude/</b><small>the ~/.claude payload: CLAUDE.md, settings.json, rules/, skills/, hooks/, templates/</small></div>
-        <div class="box acc2"><b>coordinator/</b><small>Python pkg over state.db — poller, policy, ccusage, 5 CLIs</small></div>
+        <div class="box acc"><b>claude/</b><small>the ~/.claude payload: CLAUDE.md, skills/, hooks/, lib/, templates/, plus rules/ read on demand</small></div>
+        <div class="box acc2"><b>coordinator/</b><small>Python pkg over state.db — hardware poller, job ledger + capacity gate, quota anchor, agency verdict</small></div>
         <div class="box acc3"><b>dashboard/</b><small>FastAPI + HTMX + SSE, LAN-only view of state.db + project files</small></div>
         <div class="box"><b>scripts/ · install.sh</b><small>systemd units + idempotent bootstrap</small></div>
       </div>
@@ -141,8 +141,9 @@
     <div class="layer">
       <div class="lh">~/.claude/ — symlinks into Layer 1 (runtime state stays local, untracked)</div>
       <div class="row">
-        <div class="box"><b>CLAUDE.md → · skills/ → · hooks/ → · rules/ → · templates/ → · settings.json →</b>
+        <div class="box"><b>CLAUDE.md → · skills/ → · hooks/ → · lib/ → · templates/ →</b>
           <small>symlinks to claude/*</small></div>
+        <div class="box"><b>settings.json · schedule/</b><small>machine-private real files: live settings, cron wrappers</small></div>
         <div class="box"><b>state.db · sessions/ · .env</b><small>runtime — never committed</small></div>
       </div>
     </div>
@@ -150,7 +151,7 @@
     <div class="layer">
       <div class="lh">Layer 2 — the instances · <span class="mono">~/projects/research/&lt;slug&gt;</span> (each its own git repo)</div>
       <div class="row">
-        <div class="box"><b>literature-curation</b><small>e.g. agentic-research — the hub others <code>@import</code> concepts from</small></div>
+        <div class="box"><b>literature-curation</b><small>e.g. agentic-research — the hub whose concepts other projects declare and read by path</small></div>
         <div class="box"><b>ML-experiments (HCE)</b><small>e.g. dotaml-turbo — splits.yaml, budget.yaml, DVC, sealed test split</small></div>
       </div>
     </div>
@@ -166,13 +167,16 @@
     <tbody>
       <tr><td class="mono">claude/CLAUDE.md</td><td>Durable cross-project principles (symlinked to <code>~/.claude/CLAUDE.md</code>).</td></tr>
       <tr><td class="mono">claude/settings.example.json</td><td>Scrubbed Claude Code settings — hook wiring, permissions, effort level. The live ~/.claude/settings.json is a private real file seeded from it.</td></tr>
-      <tr><td class="mono">claude/rules/</td><td>Path-scoped rules auto-loaded by the harness (<code>evaluation.md</code> = HCE discipline).</td></tr>
-      <tr><td class="mono">claude/skills/</td><td>17 invocable slash-command skills, one <code>SKILL.md</code> contract each.</td></tr>
-      <tr><td class="mono">claude/hooks/</td><td>6 lifecycle shell hooks wired to harness events.</td></tr>
+      <tr><td class="mono">claude/rules/</td><td>Framework rules: <code>evaluation.md</code> (HCE discipline) and <code>agency.md</code> (autonomy levels). Not loaded globally; skills that list one under <code>respects:</code> read it first.</td></tr>
+      <tr><td class="mono">claude/skills/</td><td>Global slash-command skills (knowledge base, hygiene, ops), one <code>SKILL.md</code> contract each.</td></tr>
+      <tr><td class="mono">claude/skills-experiment/</td><td>The experiment-loop skills. Not global: linked into a project that runs experiments.</td></tr>
+      <tr><td class="mono">claude/lib/</td><td>Secret-free shell helpers sourced by the untracked cron wrappers.</td></tr>
+      <tr><td class="mono">claude/hooks/</td><td>Shell hooks wired to harness events, plus the status line.</td></tr>
       <tr><td class="mono">claude/templates/project/</td><td>The instance scaffold copied by <code>/new-project</code>.</td></tr>
-      <tr><td class="mono">coordinator/</td><td>Python package: <code>state.db</code> schema + writers/readers, hardware poller, admission policy, ccusage, CLIs.</td></tr>
+      <tr><td class="mono">coordinator/</td><td>Python package: <code>state.db</code> schema, hardware poller, job ledger and capacity gate, quota anchor and calibration, agency verdict, CLIs.</td></tr>
       <tr><td class="mono">dashboard/</td><td>FastAPI + HTMX + SSE app. Reads <code>state.db</code> + project files. LAN-only.</td></tr>
-      <tr><td class="mono">scripts/systemd/</td><td>systemd user units: hardware poller (+timer), dashboard.</td></tr>
+      <tr><td class="mono">scripts/systemd/</td><td>systemd user units: hardware poller (+timer), dashboard, Remote Control session restore, job-failure notifier.</td></tr>
+      <tr><td class="mono">scripts/</td><td>Deterministic helpers the skills call: <code>new_project.sh</code>, <code>kg_lint.py</code>, <code>chain_budget.py</code>, and the smoke tests.</td></tr>
       <tr><td class="mono">install.sh</td><td>Idempotent bootstrap: symlinks, systemd units, backups. Safe to re-run.</td></tr>
     </tbody>
   </table>
@@ -184,7 +188,7 @@
 <section id="claude">
   <h2><span class="n">03</span>The <span class="mono">claude/</span> tree — the ~/.claude payload</h2>
   <p class="lead">Everything the Claude Code harness loads at <code>~/.claude/</code> is one
-  of these six things. They are the framework's primary surface; the coordinator and
+  of these. They are the framework's primary surface; the coordinator and
   dashboard exist to serve them.</p>
   <div class="grid2">
     <div class="panel"><h3 style="margin-top:0">CLAUDE.md</h3>
@@ -193,12 +197,14 @@
       discipline, runtime discipline (worktrees, subagents), and monitoring of
       long-running ML jobs. Kept terse; instance <code>CLAUDE.md</code> files refine it.</p></div>
     <div class="panel"><h3 style="margin-top:0">settings.json</h3>
-      <p>Wires the six hooks to harness events, sets permissions (incl. allowed
-      <code>WebSearch</code>/<code>WebFetch</code>), effort level, and theme.</p></div>
+      <p>Wires the hooks and status line to harness events, sets permissions, effort
+      level, and theme. The repo tracks a scrubbed <code>settings.example.json</code>; the
+      live file is machine-private.</p></div>
     <div class="panel"><h3 style="margin-top:0">rules/</h3>
-      <p>Currently <code>evaluation.md</code> — the Hidden Consistent Evaluation (HCE)
-      discipline. Opt-in by project shape; <code>respects:</code> frontmatter on a skill
-      declares the dependency.</p></div>
+      <p><code>evaluation.md</code> (Hidden Consistent Evaluation, opt-in by project
+      shape) and <code>agency.md</code> (how much a project's agents do unasked). Neither
+      loads globally: a skill lists them under <code>respects:</code> and reads them as
+      its first step.</p></div>
     <div class="panel"><h3 style="margin-top:0">templates/project/</h3>
       <p>The canonical instance: <code>CLAUDE.md</code>, <code>README.md</code>,
       <code>budget.yaml</code>, <code>dvc.yaml</code>, <code>NOTES.md</code>,
@@ -208,10 +214,10 @@
 </section>
 
 <section id="skills">
-  <h2><span class="n">04</span>Skills <span style="font-size:13px;color:var(--mut)">— 17 SKILL.md contracts</span></h2>
+  <h2><span class="n">04</span>Skills <span style="font-size:13px;color:var(--mut)">— one SKILL.md contract each</span></h2>
   <p class="lead">Skills are the user-facing verbs. Each is a markdown contract loaded into
-  context on invocation. Three groups: the <b>experiment loop</b>, the <b>literature
-  pipeline</b>, and <b>hygiene/ops</b>.
+  context on invocation. Three groups: the <b>experiment loop</b> (linked per project), the
+  <b>literature pipeline</b>, and <b>hygiene/ops</b>.
   <span class="tag t-sub">subagent</span> spawns a fresh subagent ·
   <span class="tag t-hce">HCE</span> respects <code>evaluation.md</code> ·
   <span class="tag t-commit">auto-commit</span> writes &amp; commits without a confirmation gate.</p>
@@ -220,25 +226,26 @@
   <table>
     <thead><tr><th class="mono">skill</th><th>role</th><th></th></tr></thead>
     <tbody>
-      <tr><td class="mono">/propose</td><td>Strategic ideation from concepts + recent literature + recent experiments. Emits one proposal file. No code, no dvc.</td><td><span class="tag t-hce">HCE</span></td></tr>
-      <tr><td class="mono">/expand</td><td>Takes one proposal → N alternative implementations sharing the hypothesis.</td><td><span class="tag t-hce">HCE</span></td></tr>
-      <tr><td class="mono">/derive-experiment</td><td>Turns one literature note into an experiment proposal; back-links it into the note.</td><td></td></tr>
+      <tr><td class="mono">/propose</td><td>Strategic ideation from concepts, recent literature and recent experiments. Emits one proposal file, or with <code>--expand</code> several sibling proposals of an existing one. No code.</td><td><span class="tag t-hce">HCE</span></td></tr>
+      <tr><td class="mono">/derive-experiment</td><td>Turns one literature note into an experiment proposal; back-links it into the note.</td><td><span class="tag t-hce">HCE</span></td></tr>
       <tr><td class="mono">/new-experiment</td><td>Scaffolds <code>experiments/YYYY-MM-DD-&lt;slug&gt;/</code> (README, config.yaml, notes.qmd, log.md, metrics.json); copies splits if HCE.</td><td><span class="tag t-hce">HCE</span> <span class="tag t-commit">auto-commit</span></td></tr>
-      <tr><td class="mono">/implement</td><td>The MLE-ideator separation boundary — the <b>only</b> skill that spawns a subagent. Runs the experiment, captures metrics, writes Diagnostics, files the proposal under <code>_done/</code> or <code>_failed/</code>.</td><td><span class="tag t-sub">subagent</span> <span class="tag t-hce">HCE</span></td></tr>
-      <tr><td class="mono">/iterate</td><td>One propose→implement cycle per call; reads the last Diagnostics, picks the strongest candidate. <code>--chain N</code> runs unattended.</td><td><span class="tag t-hce">HCE</span></td></tr>
-      <tr><td class="mono">/ensemble</td><td>Combines N completed experiments on the same metric into a new ensemble experiment.</td><td><span class="tag t-hce">HCE</span></td></tr>
+      <tr><td class="mono">/implement</td><td>The ideator/implementer boundary and the loop's only subagent. Runs the experiment, captures metrics, writes Diagnostics, files the proposal under <code>_done/</code> or <code>_failed/</code>.</td><td><span class="tag t-sub">subagent</span> <span class="tag t-hce">HCE</span></td></tr>
+      <tr><td class="mono">/iterate</td><td>One propose→implement cycle per call from the last Diagnostics. <code>--chain</code> runs unattended under <code>budget.yaml</code> ceilings and pivots before a stall halt; <code>--ensemble</code> combines completed experiments.</td><td><span class="tag t-hce">HCE</span></td></tr>
     </tbody>
   </table>
 
-  <h3>Literature pipeline — discover → fetch → ingest → graph</h3>
+  <h3>Literature pipeline — discover → curate → fetch → ingest → graph</h3>
   <table>
     <thead><tr><th class="mono">skill</th><th>role</th><th></th></tr></thead>
     <tbody>
-      <tr><td class="mono">/discover</td><td>Web-grounded triage on a topic → one ranked candidates file in <code>raw/_candidates/</code>.</td><td><span class="tag t-commit">auto-commit</span></td></tr>
-      <tr><td class="mono">/digest</td><td>Cron-friendly sweep for fresh items on active concepts since the last digest; drops candidates. Never auto-ingests.</td><td></td></tr>
+      <tr><td class="mono">/discover</td><td>Web-grounded triage on a topic → one ranked candidates file in <code>raw/_candidates/</code>, each entry marked as read from the page or from a snippet.</td><td><span class="tag t-commit">auto-commit</span></td></tr>
+      <tr><td class="mono">/digest</td><td>Cron-friendly sweep for fresh items on the project's active themes. In <code>agency: max</code> repos it also ingests the top candidates while the headroom verdict permits.</td><td><span class="tag t-commit">auto-commit</span></td></tr>
+      <tr><td class="mono">/curate</td><td>Closes candidate files: ingest or decline each item with a recorded reason, then archive the file.</td><td><span class="tag t-commit">auto-commit</span></td></tr>
       <tr><td class="mono">/fetch-paper</td><td>Downloads a paper/repo into immutable <code>raw/</code>, derives a citekey, chains into <code>/ingest</code>.</td><td><span class="tag t-commit">auto-commit</span></td></tr>
-      <tr><td class="mono">/ingest</td><td>Turns a <code>raw/</code> file into a literature note + concept updates + index/log; proposes a 0–5 relevance score; calls <code>/sync-imports</code>.</td><td><span class="tag t-commit">auto-commit</span></td></tr>
-      <tr><td class="mono">/sync-imports</td><td>Appends idempotent <code>used_by:</code> back-references to concepts that downstream projects <code>@import</code>.</td><td></td></tr>
+      <tr><td class="mono">/ingest</td><td>Turns a <code>raw/</code> file into a literature note with relevance and credibility scores, updates or seeds concepts, calls <code>/sync-imports</code>.</td><td><span class="tag t-commit">auto-commit</span></td></tr>
+      <tr><td class="mono">/sync-imports</td><td>Appends idempotent <code>used_by:</code> back-references to hub concepts a downstream project declares.</td><td><span class="tag t-commit">auto-commit</span></td></tr>
+      <tr><td class="mono">/promote-moc</td><td>Promotes a ripe cluster of ≥5 related concepts into a Map of Content; declines thin or redundant ones.</td><td></td></tr>
+      <tr><td class="mono">/elevate</td><td>Hub only. Proposes changes to this framework from well-evidenced, simplifying ideas in the knowledge graph. Writes proposals for human review; never edits the framework.</td><td></td></tr>
     </tbody>
   </table>
 
@@ -246,17 +253,17 @@
   <table>
     <thead><tr><th class="mono">skill</th><th>role</th><th></th></tr></thead>
     <tbody>
-      <tr><td class="mono">/new-project</td><td>Scaffolds <code>~/projects/research/&lt;slug&gt;</code> from the template; <code>git init</code>, <code>dvc init</code>, <code>uv init</code>, first commit.</td><td></td></tr>
-      <tr><td class="mono">/lint</td><td>Knowledge-graph health check. Auto-detects research vs experiments mode and runs only applicable checks. HCE violations are hard failures.</td><td><span class="tag t-hce">HCE</span></td></tr>
+      <tr><td class="mono">/new-project</td><td>Scaffolds <code>~/projects/research/&lt;slug&gt;</code> from the template via <code>scripts/new_project.sh</code>: git, dvc, uv, first commit, GitHub remote, Pages.</td><td></td></tr>
+      <tr><td class="mono">/lint</td><td>Knowledge-graph health check. <code>scripts/kg_lint.py</code> runs the deterministic checks; the skill prioritizes the findings. HCE violations are hard failures.</td><td><span class="tag t-hce">HCE</span></td></tr>
       <tr><td class="mono">/wrap</td><td>End-of-session discipline: appends Did/Findings/Next to <code>NOTES.md</code>, updates index/log, warns on placeholder rot.</td><td><span class="tag t-commit">auto-commit</span></td></tr>
-      <tr><td class="mono">/headroom</td><td>Sub-second resource snapshot — ccusage quota (5h block + reset-anchored weekly), hardware, job queue. Read-only.</td><td></td></tr>
-      <tr><td class="mono">/plan</td><td>Asks the coordinator whether a job should start now; returns admit/defer with reason. Call before any &gt;200k-token or GPU job.</td><td></td></tr>
+      <tr><td class="mono">/headroom</td><td>Sub-second snapshot: Claude quota (Anthropic's reported % plus spend since), hardware, the box schedule, and the agency verdict. Read-only.</td><td></td></tr>
+      <tr><td class="mono">/jobs</td><td>Schedule-aware headroom: what recurring jobs run on the box, what each costs, a forecast, the earliest window a run fits, and an attributed launcher.</td><td></td></tr>
     </tbody>
   </table>
 </section>
 
 <section id="hooks">
-  <h2><span class="n">05</span>Hooks <span style="font-size:13px;color:var(--mut)">— 6 scripts wired to lifecycle events</span></h2>
+  <h2><span class="n">05</span>Hooks <span style="font-size:13px;color:var(--mut)">— 5 scripts wired to lifecycle events</span></h2>
   <p class="lead">Hooks are the framework's enforcement layer — discipline that doesn't rely
   on the agent remembering. Wired in <code>settings.json</code>.</p>
   <table>
@@ -264,9 +271,8 @@
     <tbody>
       <tr><td>SessionStart</td><td class="mono">session-start.sh</td><td>Primes the session (context/state at startup).</td></tr>
       <tr><td>PreCompact</td><td class="mono">pre-compact.sh</td><td>Preserves load-bearing context before the harness compacts the window.</td></tr>
-      <tr><td>Stop</td><td class="mono">token_logger.sh</td><td>Writes a <code>token_events</code> row to <code>state.db</code> per turn (usage passed as argv, not stdin).</td></tr>
-      <tr><td>PostToolUse <span class="mono" style="font-size:11px">(Write)</span></td><td class="mono">status_emit.sh</td><td>Emits a status signal whenever a file is written.</td></tr>
-      <tr><td>PreToolUse</td><td class="mono">pretooluse_cap.sh</td><td>Safety net: blocks further tool calls once a declared token ceiling is exceeded. Backstop, not primary control.</td></tr>
+      <tr><td>Stop</td><td class="mono">token_logger.sh</td><td>Records each turn's token spend (deduped per response, subagents included) to <code>state.db</code> and the project's token log.</td></tr>
+      <tr><td>statusLine</td><td class="mono">statusline.sh</td><td>Renders the status line and records Anthropic's reported quota %, which anchors <code>/headroom</code>.</td></tr>
       <tr><td>SessionEnd</td><td class="mono">session-end.sh</td><td>Writes the daily journal and commits + pushes it (scoped to <code>journal/</code>) in every git repo, backstops <code>/wrap</code>, and (opt-in via <code>budget.yaml git.auto_push</code>) commits + pushes the full project, retrying leftover unpushed commits.</td></tr>
     </tbody>
   </table>
@@ -274,7 +280,7 @@
 
 <section id="rules">
   <h2><span class="n">06</span>Rules &amp; CLAUDE.md — the discipline spec</h2>
-  <p class="lead">Two prose layers govern agent behaviour without code.</p>
+  <p class="lead">The prose layers. Anything that must hold without exception lives in a hook or script instead.</p>
   <div class="grid2">
     <div class="panel"><h3 style="margin-top:0">CLAUDE.md (durable principles)</h3>
       <p>Where artifacts live, git-as-memory, the experiment folder contract, end-of-task
@@ -284,11 +290,20 @@
       epochs).</p></div>
     <div class="panel"><h3 style="margin-top:0">rules/evaluation.md (HCE)</h3>
       <p>Hidden Consistent Evaluation prevents the autonomous loop from overfitting its own
-      signal. Three hard clauses: <b>(1)</b> <code>test/</code> is off-limits during search;
-      <b>(2)</b> two metric files per experiment — <code>metrics.json</code> (validation,
-      the search signal) vs <code>final_metrics.json</code> (held-out, written only at chain
-      end); <b>(3)</b> comparable experiments share one seeded split. Opt-in by project
-      shape; <code>/lint</code> is the backstop.</p></div>
+      signal. Four hard clauses: <b>(1)</b> <code>test/</code> is off-limits during search,
+      including by retrieval; <b>(2)</b> two metric files per experiment —
+      <code>metrics.json</code> (validation, the search signal) vs
+      <code>final_metrics.json</code> (held-out, written once at chain end);
+      <b>(3)</b> comparable experiments share one seeded split; <b>(4)</b> the evaluator is
+      part of the holdout: hashed at chain start, checked against a do-nothing submission,
+      run pristine at the final pass. Opt-in by project shape; <code>/lint</code> is the
+      backstop.</p></div>
+    <div class="panel"><h3 style="margin-top:0">rules/agency.md</h3>
+      <p>Per-project autonomy, set by <code>agency:</code> in <code>budget.yaml</code>.
+      <code>standard</code> proposes and waits. <code>max</code> fetches, ingests, proposes
+      and iterates unasked while the coordinator's verdict permits and the budget ceilings
+      hold. One Confirmation principle decides what pauses: artifact writes commit
+      everywhere; hypothesis selection confirms only under <code>standard</code>.</p></div>
   </div>
 </section>
 
@@ -316,26 +331,27 @@
 
 <section id="coordinator">
   <h2><span class="n">08</span>Coordinator — one sqlite DB as source of truth</h2>
-  <p class="lead">A single <code>~/.claude/state.db</code> tracks resources so skills can make
-  admit/defer decisions instead of guessing. The Python package wraps it with writers,
-  readers, a hardware poller, an admission policy, and five CLIs.</p>
+  <p class="lead">A single <code>~/.claude/state.db</code> tracks tokens, hardware and the
+  box's scheduled jobs, so a session can see what it would collide with before spending
+  compute, and an <code>agency: max</code> repo knows how hard to push.</p>
 
   <div class="grid2">
     <div class="panel"><h3 style="margin-top:0">state.db tracks</h3>
       <table style="margin:0">
-        <tr><td class="mono">token_events</td><td>per-turn usage from the Stop hook</td></tr>
+        <tr><td class="mono">token_events</td><td>per-turn spend from the Stop hook (deduped per response, subagents included)</td></tr>
         <tr><td class="mono">hardware_samples</td><td>CPU/RAM/disk/GPU @ 30s cadence</td></tr>
-        <tr><td class="mono">jobs</td><td>declared work + est. cost + status</td></tr>
-        <tr><td class="mono">decisions</td><td>admit/defer log for policy review</td></tr>
+        <tr><td class="mono">scheduled_jobs · job_runs · job_samples</td><td>the job ledger: timer/cron inventory, observed runs, learned footprints</td></tr>
+        <tr><td class="mono">job_gate · gate_events</td><td>capacity-gate leases, waits and decisions</td></tr>
       </table>
     </div>
     <div class="panel"><h3 style="margin-top:0">modules</h3>
       <table style="margin:0">
-        <tr><td class="mono">db / init_db</td><td>connection + schema</td></tr>
-        <tr><td class="mono">writers / readers</td><td>insert events; query windows</td></tr>
+        <tr><td class="mono">db / init_db / writers / readers</td><td>schema, inserts, window queries</td></tr>
         <tr><td class="mono">poller</td><td>hardware sampler (systemd timer)</td></tr>
-        <tr><td class="mono">policy</td><td><code>can_start()</code> admission logic</td></tr>
-        <tr><td class="mono">ccusage</td><td>accurate quota from <code>projects/*.jsonl</code></td></tr>
+        <tr><td class="mono">jobs</td><td>ledger, forecast, window search, capacity gate, attributed launcher</td></tr>
+        <tr><td class="mono">transcripts / token_log</td><td>deduped usage straight from session transcripts</td></tr>
+        <tr><td class="mono">ratelimits / calibrate / ccusage</td><td>quota anchored on Anthropic's reported %, self-calibrating ceilings, ccusage fallback</td></tr>
+        <tr><td class="mono">agency</td><td>GO / SLOW / HOLD verdict from quota pacing + hardware + schedule</td></tr>
       </table>
     </div>
   </div>
@@ -344,17 +360,18 @@
   <table>
     <thead><tr><th class="mono">command</th><th>backs</th><th>does</th></tr></thead>
     <tbody>
-      <tr><td class="mono">claude-coordinator-status</td><td>/headroom</td><td>ccusage quota + hardware + queue snapshot</td></tr>
-      <tr><td class="mono">claude-coordinator-plan</td><td>/plan</td><td>runs <code>policy.can_start</code> → admit/defer</td></tr>
-      <tr><td class="mono">claude-coordinator-job</td><td>skills</td><td>declare / update a job in the queue</td></tr>
+      <tr><td class="mono">claude-coordinator-status</td><td>/headroom</td><td>quota + hardware + box schedule + agency verdict</td></tr>
+      <tr><td class="mono">claude-coordinator-agency</td><td>agency: max skills</td><td>the GO / SLOW / HOLD verdict, as JSON for skills</td></tr>
+      <tr><td class="mono">claude-coordinator-jobs</td><td>/jobs, SessionStart</td><td>brief, forecast, window, run, gate, health and more</td></tr>
+      <tr><td class="mono">claude-coordinator-calibrate</td><td>poller</td><td>refits plan ceilings from logged quota readings</td></tr>
       <tr><td class="mono">claude-coordinator-poll</td><td>systemd</td><td>one hardware sample → state.db</td></tr>
       <tr><td class="mono">claude-coordinator-init</td><td>install</td><td>create the schema</td></tr>
     </tbody>
   </table>
-  <p class="note"><b>ccusage</b> shells out to the community <code>ccusage</code> CLI to read
-  per-message usage. The weekly window is reset-anchored (Mon 17:00 local) and
-  well-calibrated; the 5h block boundary drifts, so trust the projection/burn-rate over the
-  headline 5h %.</p>
+  <p class="note">An earlier admission layer (a job queue, an admit/defer policy, a
+  per-session PreToolUse cap) was removed in August 2026 after three months of telemetry
+  showed it never fired. The capacity gate that replaced it wraps heavy systemd jobs, not
+  agent sessions; see <code>docs/decisions/0002-capacity-gate.md</code>.</p>
 </section>
 
 <section id="dashboard">
@@ -366,11 +383,12 @@
   <table>
     <thead><tr><th class="mono">route</th><th>view</th></tr></thead>
     <tbody>
-      <tr><td class="mono">/</td><td>Live now — loop sessions, hardware gauges, quota meters, token sparkline.</td></tr>
-      <tr><td class="mono">/queue</td><td>Coordinator job queue (running + queued + recent completed).</td></tr>
+      <tr><td class="mono">/</td><td>Live now — sessions, hardware gauges, quota meters, token sparkline.</td></tr>
+      <tr><td class="mono">/jobs</td><td>The job ledger: inventory, footprints, forecast, gate queue.</td></tr>
+      <tr><td class="mono">/ports</td><td>The machine's service and port registry.</td></tr>
       <tr><td class="mono">/projects-hub</td><td>Discovery across all research projects.</td></tr>
       <tr><td class="mono">/project/&lt;name&gt;</td><td>Per-project cycle table + Diagnostics.</td></tr>
-      <tr><td class="mono">/project/&lt;name&gt;/{concepts,literature,candidates}</td><td>Knowledge-graph browsing (markdown rendered).</td></tr>
+      <tr><td class="mono">/project/&lt;name&gt;/{concepts,literature,candidates,activity}</td><td>Knowledge-graph browsing (markdown rendered).</td></tr>
       <tr><td class="mono">/projects/&lt;name&gt;/dashboard/…</td><td>Serves a project's own static dashboard assets.</td></tr>
       <tr><td class="mono">/events</td><td>SSE stream driving live refresh.</td></tr>
     </tbody>
@@ -381,36 +399,45 @@
   <h2><span class="n">10</span>Session lifecycle — how the parts talk</h2>
   <p class="lead">A single session weaves skills, hooks, and the coordinator together:</p>
   <ol>
-    <li><b>SessionStart</b> hook primes context.</li>
-    <li>Before a heavy job, a skill calls <b>/plan</b> → <code>policy.can_start</code> reads
-      hardware + quota from <code>state.db</code> → <b>admit / defer</b>.</li>
-    <li>On admit, the skill optionally declares a <b>job</b> (visible in <code>/headroom</code>
-      and the dashboard queue). <b>/implement</b> spawns the subagent that runs it.</li>
-    <li>Each turn, the <b>Stop</b> hook logs <code>token_events</code>; the
-      <b>PreToolUse</b> cap halts a runaway loop past its ceiling. A systemd timer polls
-      hardware every 30s.</li>
-    <li>The <b>dashboard</b> reflects all of this live over SSE.</li>
-    <li><b>/wrap</b> (backstopped by the <b>SessionEnd</b> hook) writes Did/Findings/Next to
-      <code>NOTES.md</code>, the journal, and — if the project opts in — commits and pushes.</li>
+    <li><b>SessionStart</b> prints the box schedule (running and upcoming jobs, the next
+      GPU-quiet window) and the tail of the project's <code>NOTES.md</code>.</li>
+    <li>A skill that depends on a framework rule reads it first (<code>respects:</code>).
+      In an <code>agency: max</code> repo it also asks the coordinator for the
+      <b>GO / SLOW / HOLD</b> verdict and sizes its batch to it.</li>
+    <li>Before a long GPU or multi-core run, the session asks <code>/jobs</code> for a
+      window and launches through the attributed launcher, so the run queues behind
+      production jobs and other sessions can see it. <b>/implement</b> spawns the one
+      subagent of the experiment loop.</li>
+    <li>Each turn, the <b>Stop</b> hook records token spend and the status line records
+      Anthropic's reported quota %. A systemd timer samples hardware every 30s.</li>
+    <li>Before compaction, <b>PreCompact</b> reminds the session to persist findings and
+      to quote chat-only standing instructions into the summary.</li>
+    <li><b>/wrap</b> writes Did/Findings/Next to <code>NOTES.md</code>; the
+      <b>SessionEnd</b> hook writes the journal and, if the project opts in, commits and
+      pushes what is left.</li>
   </ol>
-  <p class="note">Division of labour: <b>skills</b> = the agent's verbs · <b>hooks</b> =
-  non-negotiable discipline · <b>coordinator</b> = the shared resource truth · <b>dashboard</b>
-  = the human's read-only window.</p>
+  <p class="note">Division of labour: <b>skills</b> = the agent's verbs · <b>hooks and
+  scripts</b> = what must hold without exception · <b>coordinator</b> = the shared
+  resource truth · <b>dashboard</b> = the human's read-only window.</p>
 </section>
 
 <section id="install">
   <h2><span class="n">11</span>Install &amp; operate</h2>
   <pre><code>git clone git@github.com:eschmitt88/claude-system.git ~/claude-system
 cd ~/claude-system &amp;&amp; ./install.sh        # idempotent: symlinks + systemd units + backups</code></pre>
-  <p><code>install.sh</code> symlinks <code>claude/{rules,skills,hooks,templates}</code> and
-  <code>claude/{CLAUDE.md,settings.json}</code> into <code>~/.claude/</code> (backing up
-  anything it replaces), then installs the systemd user units. Required env vars live in
-  <code>~/.claude/.env</code> (copied from <code>.env.example</code>; never overwritten).</p>
+  <p><code>install.sh</code> symlinks <code>claude/{skills,hooks,lib,templates}</code> and
+  <code>claude/CLAUDE.md</code> into <code>~/.claude/</code> (backing up anything it
+  replaces), seeds a private <code>settings.json</code> from the scrubbed example if none
+  exists, provisions the coordinator and dashboard venvs, and installs the systemd user
+  units. Machine config lives in <code>~/.claude/.env</code> (copied from
+  <code>.env.example</code>; never overwritten).</p>
   <table>
     <thead><tr><th class="mono">systemd user unit</th><th>role</th></tr></thead>
     <tbody>
       <tr><td class="mono">claude-hw-poller.service / .timer</td><td>Samples hardware into <code>state.db</code> every 30s.</td></tr>
       <tr><td class="mono">claude-dashboard.service</td><td>Runs the FastAPI dashboard on the LAN.</td></tr>
+      <tr><td class="mono">claude-rc-snapshot.timer / claude-rc-restore.service / claude-rc-server.service</td><td>Snapshot live Remote Control sessions, restore them after a reboot, and keep a server up so a phone can start new ones.</td></tr>
+      <tr><td class="mono">claude-job-failed@.service</td><td>OnFailure handler: pushes a notice when a gated job fails.</td></tr>
     </tbody>
   </table>
   <p class="note">Because <code>claude/</code> is symlinked into <code>~/.claude/</code>,
