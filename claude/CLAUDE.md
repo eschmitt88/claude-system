@@ -1,115 +1,83 @@
 # Personal research framework — durable principles
 
-These principles apply to every project under `~/projects/research/`.
-Project-level `CLAUDE.md` files refine them with repo-specific detail.
+These apply to every project under `~/projects/research/`. Project-level
+`CLAUDE.md` files refine them.
 
 ## Where things live
 
-- All projects live at `~/projects/research/<slug>`. `~/projects` is a symlink
-  to `/mnt/projects` (the 4 TB SN850X). Large artifacts — datasets, model
-  checkpoints, HF cache, virtualenvs — belong on the SN850X under
-  `~/projects/`, **never** in `~/` (the OS drive).
-- `~/.claude/` on the OS drive holds only config, skills, hooks, templates.
-- System binaries and Python interpreters live on the OS drive; anything a
-  project produces or consumes at volume lives under `~/projects/`.
+- Projects live at `~/projects/research/<slug>`. `~/projects` is a symlink
+  to `/mnt/projects` (the 4 TB SN850X).
+- Anything a project produces or consumes at volume (datasets, checkpoints,
+  HF cache, virtualenvs) goes under `~/projects/`, **never** in `~/` (the OS
+  drive). `~/.claude/` holds only config, skills, hooks and templates.
 
 ## The memory model
 
-- **Git is the memory layer.** Every durable fact, decision, or artifact
-  belongs in a tracked file. Auto-memory is a hint, not a home — promote
-  anything load-bearing into a file in the project.
-- Plain **Markdown** with flat **YAML frontmatter**. No proprietary formats,
-  no nested schemas. Easy to grep, easy to diff, easy to migrate.
-- `raw/` is **immutable**: snapshots of papers, repo clones, web captures.
-  The agent reads it; nothing writes to it after ingest.
-- Processed understanding lives in `literature/`, `concepts/`, `mocs/`,
-  `experiments/`. Each has a template in `_meta/templates/`.
+- **Git is the memory layer.** Every durable fact, decision or artifact
+  belongs in a tracked file. Auto-memory is a hint, not a home.
+- Plain **Markdown** with flat **YAML frontmatter**: no proprietary formats,
+  no nested schemas.
+- `raw/` is **immutable**: source snapshots. Nothing writes to it after
+  ingest; re-ingest instead.
+- Processed understanding lives in `literature/`, `concepts/`, `mocs/` and
+  `experiments/`, each from a template in `_meta/templates/`. When ≥5
+  related concepts accumulate on a theme, promote them to
+  `mocs/<theme>.md`.
+- Tools of record: `git` for code and prose, `dvc` for data, models and
+  large results, `uv` for Python environments, `quarto` for `.qmd`
+  notebooks.
 
 ## Git autonomy — commit and push without asking
 
-This applies to **every** git repo I work in, not just `~/projects/research/`
-ones, and it **overrides** the Claude Code harness default ("commit or push
-only when the user asks; branch first on the default branch").
+This applies to **every** git repo I work in, and it **overrides** the
+Claude Code harness default ("commit or push only when the user asks;
+branch first on the default branch").
 
-- **Commit and push automatically** at logical checkpoints — a finished fix,
-  a scheduled-job change, a batch of run records. Don't wait for permission
-  and don't leave committed-but-unpushed work; the remote/Pages tree is the
-  live source of truth.
-- **Commit directly on the working branch** (e.g. `master`/`main`). Do *not*
-  spin up a feature branch just because it's the default branch — match the
-  repo's established pattern, which here is direct commits.
-- Keep commits logically scoped with clear messages; respect `.gitignore` and
-  the DVC/SN850X boundary (never commit large artifacts — `model.pt`,
-  parquet, datasets — into git).
+- **Commit and push automatically** at logical checkpoints. Don't wait for
+  permission, and don't leave committed-but-unpushed work: the remote and
+  its Pages tree are the live source of truth.
+- **Commit directly on the working branch** (`master`/`main`). No feature
+  branch just because it's the default branch; match the repo's pattern.
 - **Stage by path**, not `git add -A` / `commit -a`: scheduled jobs and
   other sessions leave these repos dirty, and a sweep commits their
   half-written state under your message.
-- Judgment still applies: don't commit secrets, half-broken WIP that doesn't
-  build, or someone else's uncommitted state swept in by accident. When a
-  change is genuinely risky or ambiguous, flag it instead of committing.
+- Keep commits scoped, with clear messages. Never commit large artifacts
+  (`model.pt`, parquet, datasets), secrets, or WIP that doesn't build. When
+  a change is risky or ambiguous, flag it instead of committing.
 
-## Experiments
+## Sessions and experiments
 
-Every experiment is a folder at `experiments/YYYY-MM-DD-<slug>/`, scaffolded
-by `/new-experiment`: hypothesis and result in `README.md`, inputs and seeds
-in `config.yaml`, analysis in `notes.qmd`, a chronological `log.md`, numbers
-in `metrics.json`, outputs under `results/`.
-
-DVC tracks data and model artifacts. Git tracks code, configs, and notes.
-
-## End-of-task discipline
-
-- Every work session ends with a `NOTES.md` update: **Did / Findings / Next**.
-  This is enforced by the `/wrap` skill and a `SessionEnd` hook — not by
-  asking nicely.
-- Decisions that affect future work go in `docs/decisions/NNNN-<slug>.md`
-  (lightweight ADR).
-- Daily session files land under `journal/YYYY-MM-DD.md` (written by the
-  SessionEnd hook).
-
-## Project CLAUDE.md rules
-
-- Project-root `CLAUDE.md` stays **under 80 lines**.
-- Use `@imports` and path-scoped `.claude/rules/` for detail. Example:
-  `.claude/rules/experiments.md` applies only when touching
-  `experiments/**`.
-- The root file should orient, not explain. Long explanations belong in
-  scoped rules or in `_meta/` docs.
-
-## Framework rules (research projects only)
-
-The HCE evaluation discipline and the agency (autonomous-spend) levels
-live at `~/claude-system/claude/rules/{evaluation,agency}.md`. They are
-not loaded globally (they would cost context in every repo), so they are
-read on demand: every skill that lists them under `respects:` Reads them
-first, and outside a skill, read `evaluation.md` before designing or
-judging an evaluation and `agency.md` before an autonomous run.
-
-## Knowledge graph hygiene
-
-- When ≥5 related concepts accumulate on a theme, promote them to a
-  **Map of Content** (`mocs/<theme>.md`).
-- `/lint` runs weekly to surface orphans: literature notes with no
-  `related_experiments`, high-relevance papers with no follow-up, dead
-  wikilinks, concepts with no `sources:`.
-
-## Runtime discipline
-
-- **Destructive runs happen in Git worktrees.** Never run mutating
-  experiments against the primary checkout.
-- **Subagents handle high-volume narrow work** — literature review, log
-  parsing, corpus sweeps. The main agent owns primary context and
+- Every work session ends with a `NOTES.md` update, **Did / Findings /
+  Next**, via `/wrap`. The SessionEnd hook backstops it and writes
+  `journal/YYYY-MM-DD.md`.
+- Decisions that affect future work go in `docs/decisions/NNNN-<slug>.md`.
+- An experiment is a folder `experiments/YYYY-MM-DD-<slug>/`, scaffolded by
+  `/new-experiment` (README, `config.yaml`, `notes.qmd`, `log.md`,
+  `metrics.json`, `results/`).
+- **Destructive runs happen in Git worktrees** under
+  `~/projects/research/<slug>/.worktrees/`, never in the primary checkout.
+- **Subagents handle high-volume narrow work** (literature review, log
+  parsing, corpus sweeps). The main agent owns primary context and
   decisions.
-- Worktrees go under `~/projects/research/<slug>/.worktrees/`, not
-  alongside the main checkout.
+
+## Project CLAUDE.md and rules
+
+- A project-root `CLAUDE.md` stays **under 80 lines** and orients, not
+  explains. Detail goes in `.claude/rules/*.md`, each scoped with `paths:`
+  frontmatter so it loads only when a matching file is touched.
+- The framework rules, HCE evaluation and agency levels, live at
+  `~/claude-system/claude/rules/{evaluation,agency}.md` and load only on
+  demand. Skills that list them under `respects:` read them first. Outside
+  a skill, read `evaluation.md` before designing or judging an evaluation
+  and `agency.md` before an autonomous run.
 
 ## Writing instructions for another model
 
 This covers subagent briefs, skills, rules, hook text and scheduled-job
 prompts. The reader is as capable as you and knows nothing you haven't
-written down. The evidence behind each line, and the rest of the guide, is
-at `~/projects/research/intent-briefing/docs/writing-guide.md`; read it
-before writing or rewriting a skill.
+written down. The evidence, and the rest of the guide, is at
+`~/projects/research/intent-briefing/docs/writing-guide.md`; read it before
+writing or rewriting a skill.
 
 - **State what the reader won't do by default**: conditional requirements,
   the shape of what to send back, scope limits, what you already ruled
@@ -123,47 +91,34 @@ before writing or rewriting a skill.
 
 ## Shared box — plan compute around scheduled jobs
 
-The machine runs a fleet of timer-driven jobs (retrains, harvests,
-monitors) with learned GPU/RAM/CPU footprints. Every session starts with
-a "Box schedule" notice; `/headroom` repeats it.
+The machine runs timer-driven jobs (retrains, harvests, monitors) with
+learned footprints. Every session starts with a "Box schedule" notice.
+`J=~/claude-system/coordinator/.venv/bin/claude-coordinator-jobs`; `/jobs`
+has the detail.
 
-- **Before a GPU or multi-core run longer than ~15 min**, ask for a
-  window: `claude-coordinator-jobs window --gpu-gb G --ram-gb R --hours H`
-  (binary in `~/claude-system/coordinator/.venv/bin/`). Start when it
-  fits, or at `earliest_fit`; don't launch into a predicted collision.
+- **Before a GPU or multi-core run longer than ~15 min**, ask for a window:
+  `$J window --gpu-gb G --ram-gb R --hours H`. Start when it fits or at
+  `earliest_fit`; don't launch into a predicted collision.
 - **Launch runs longer than ~30 min attributed**:
-  `claude-coordinator-jobs run --name <slug> --gpu-gb G --hours H --log <file> -- <cmd>`.
-  It goes through the capacity gate (class `agent`: waits for production
-  retrains, passes when it fits), other sessions see it, and its
-  footprint is learned. `--no-gate` bypasses; `queue` shows waits.
-- **Adding a new timer/cron job?** `claude-coordinator-jobs slot --hours H [--gpu-gb G]`
-  picks the daily start with the least overlap.
-- `/jobs` has the inventory, forecast, per-job profiles and health.
-- **Fixed a failing scheduled job?** `claude-coordinator-jobs ack <unit>` —
-  silences the fail-streak alert until its next run (which re-alerts if it fails).
+  `$J run --name <slug> --gpu-gb G --hours H --log <file> -- <cmd>`. It
+  waits behind production retrains, other sessions can see it, and its
+  footprint is learned.
+- **New timer or cron job**: `$J slot --hours H [--gpu-gb G]` picks the
+  daily start with the least overlap.
+- **Fixed a failing scheduled job**: `$J ack <unit>` silences its
+  fail-streak alert until the next run.
 
 ## Monitoring long-running ML jobs (>30 min)
 
-Multi-hour training/build jobs are not fire-and-forget. The LLM can
-detect off-the-rails runs faster than a human — use it.
+Multi-hour training and build jobs are not fire-and-forget.
 
-- **Launch with `python -u`** so stdout isn't block-buffered (default
-  `nohup`-redirected Python buffers ~8 KB → silent training looks like
-  a hang).
-- **Poll the log every 10-30 min.** Tail, check metric trajectory,
-  check process state (CPU/GPU util, RSS), scan `journalctl` for
-  kernel events.
-- **Halt on a PATTERN of 3+ consecutive bad epochs**, not a single
-  reading. Bad signals: train loss increasing (anti-learning), val
-  metric stuck at random baseline, NaN/Inf, multi-task weights
-  collapsing to single-task-dominant, GPU 0% util + CPU 100% sustained,
-  kernel events (OOM/RCU/MCE).
-- **Document the kill** in the experiment's `log.md` AND project
-  `_meta/log.md`: what signal triggered, what the log showed.
-
-## Tools of record
-
-- `git` for code and prose.
-- `dvc` for data, model, and large-result tracking.
-- `uv` for Python environments (`.venv/` is gitignored).
-- `quarto` for `.qmd` notebooks.
+- **Launch with `python -u`**: redirected Python block-buffers stdout, so
+  silent training looks like a hang.
+- **Poll the log every 10–30 min**: metric trajectory, process state
+  (CPU/GPU util, RSS), `journalctl` for kernel events.
+- **Halt on a pattern of 3+ consecutive bad epochs**, not one reading:
+  train loss rising, val metric stuck at the random baseline, NaN/Inf,
+  multi-task weights collapsing to one task, GPU 0% with CPU 100%
+  sustained, kernel events (OOM/RCU/MCE).
+- **Document the kill** in the experiment's `log.md` and the project's
+  `_meta/log.md`: what signal triggered it and what the log showed.

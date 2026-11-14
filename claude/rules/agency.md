@@ -1,99 +1,19 @@
-# Agency — autonomous-spend levels per project
+# Agency — how much a project's agents do unasked
 
-How much initiative an agent should take in a project is a per-repo
-setting, declared in `budget.yaml` as `agency:`. Two levels:
+Set per repo by `agency:` in `budget.yaml`.
 
-- **`standard`** (default) — propose and wait. Discovery drops candidates
-  for the user to curate; `/iterate` pauses each cycle; nothing fetches,
-  ingests, or launches experiments without a human go-ahead. This is the
-  safe default; a repo with no `agency:` field is `standard`.
-- **`max`** — act autonomously. In a `max` repo the agent should *make
-  use of headroom*: fetch papers, ingest them, propose, and iterate
-  without pausing for confirmation, **while the coordinator's agency
-  verdict permits and the `budget.yaml` ceilings hold.**
-
-This rule applies to the discovery/execution skills — `/digest`,
-`/discover`, `/fetch-paper`, `/ingest`, `/propose`, `/iterate`. They list
-this file under `respects:`.
-
-## The headroom gate
-
-Before a burst of autonomous work in a `max` repo, consult the verdict:
-
-```sh
-~/claude-system/coordinator/.venv/bin/claude-coordinator-agency --json
-```
-
-It returns `verdict` ∈ {`go`, `slow`, `hold`} and `aggressiveness` ∈
-{`high`, `normal`, `low`, `none`}, computed from:
-
-- **Reset-anchored token pacing** — how far the weekly quota is spent vs a
-  steady pace that would consume it exactly at reset. Being *behind* pace
-  (especially as the reset nears) means slack to spend now; unused weekly
-  quota is wasted. `suggested_session_tokens` is the advisory slack budget.
-- **Live hardware headroom** — CPU/RAM/GPU utilization and free disk.
-  Below ~50% utilization there is room to run more concurrently.
-
-Act on it:
-
-- **`go` / high** — proceed aggressively. Fetch + ingest the top
-  candidates in the queue; chain `/iterate` cycles; batch the work.
-- **`go` / `slow` (normal/low)** — proceed, but smaller batches; one
-  fetch→ingest at a time, single `/iterate` cycle, re-check the verdict
-  between units.
-- **`hold`** — do not start new autonomous work. Log why and stop. Resume
-  on the next scheduled run when headroom recovers.
-
-Re-check the verdict periodically inside a long autonomous burst (e.g.
-every few units of work), not just once — quota and GPU state move.
-
-### Plan around the box schedule
-
-The verdict's `schedule` block (and the session-start "Box schedule"
-notice) lists tracked jobs running now and the next scheduled GPU job.
-Before a GPU or multi-core run longer than ~15 min:
-
-```sh
-~/claude-system/coordinator/.venv/bin/claude-coordinator-jobs window --gpu-gb <G> --ram-gb <R> --hours <H>
-```
-
-Start when it says `fits`; otherwise start at `earliest_fit` or size the
-run to end before the next GPU job. Launch runs longer than ~30 min via
-`claude-coordinator-jobs run --name <slug> ... -- <cmd>`: it passes through
-the capacity gate as class `agent` (queues behind production retrains,
-passes immediately when it fits), is attributed, and is visible to other
-sessions. Details: `/jobs`.
-
-## What `max` changes, skill by skill
-
-- **`/digest`** — after writing candidates, if `agency: max` and the
-  verdict is not `hold`, **auto-advance the backlog**: `/fetch-paper` +
-  `/ingest` the highest-ranked candidates (count scaled by
-  aggressiveness — this is the canonical scale: ~6 on `high`, ~3 on
-  `normal`, ~2 on `low`), instead of leaving them for manual curation.
-  This is the deliberate relaxation of `/digest`'s "never auto-ingest"
-  default, scoped to opt-in repos.
-- **`/discover` / `/fetch-paper` / `/ingest`** — already commit without a
-  confirmation gate; under `max` they may also be chained automatically by
-  `/digest` rather than user-invoked one at a time.
-- **`/iterate`** — under `max` and a non-`hold` verdict with the GPU free
-  (`hardware.gpu_free`), run as `--chain` within the `budget.yaml`
-  ceilings instead of pausing per cycle.
-- **`/promote-moc`** — after an ingest burst adds or links concepts, run
-  `/promote-moc` (auto-detect) so a newly-ripe cluster becomes a Map of
-  Content without waiting to be asked. It promotes only genuinely ripe,
-  un-mapped clusters (>=5 related concepts not already in a MoC) and
-  declines redundant ones — keep that restraint; do not manufacture thin
-  MoCs just because agency is `max`.
-- **`/curate`** — don't let candidate files pile up. Drain the standing
-  `raw/_candidates/` backlog: ingest the keepers, decline the rest with a
-  recorded reason, and archive each file to `raw/_candidates/_done/`. A
-  candidate file with no disposition is unfinished work; `max` repos close
-  it rather than leaving an "uncurated" pile.
+- **`standard`** (the default, and what a missing field means): propose and
+  wait. Candidates are left for the user to curate, `/iterate` pauses each
+  cycle, and nothing fetches, ingests or launches experiments without a
+  go-ahead.
+- **`max`**: act. Fetch, ingest, curate, propose and iterate without
+  pausing, while the coordinator's verdict permits and the `budget.yaml`
+  ceilings hold. The point is to use headroom: weekly quota left unspent
+  at the reset is wasted.
 
 ## Confirmation principle
 
-One rule decides which skills pause for a human and which don't:
+One rule decides which skills pause for a human:
 
 > **Artifact writes** — ingesting sources, literature/concept notes,
 > scaffolds, logs, wrap entries — commit autonomously everywhere, in
@@ -102,40 +22,63 @@ One rule decides which skills pause for a human and which don't:
 > `agency: standard` and auto-advances under `agency: max` (verdict
 > permitting).
 
-Skills reference this principle instead of hard-coding their own gate.
-Rationale: recording what happened needs no approval (git makes it
-reversible); choosing what to spend compute on is the decision worth a
-human look — and only in repos that haven't opted into autonomy.
-Over-gating has a measured cost (wu2026hasbench: +50% interaction turns
-for diminishing or negative returns), so the default is the gate off
-except at genuine decision points.
+Recording what happened needs no approval, because git makes it
+reversible. Choosing what to spend compute on is the decision worth a human
+look, and only in repos that haven't opted into autonomy. Over-gating has a
+measured cost (wu2026hasbench: +50% interaction turns for diminishing or
+negative returns).
 
-## Persist the work — push at the end of every autonomous burst
+## The headroom gate
 
-The per-repo Pages site reads the **live** GitHub tree, so autonomous work
-is invisible until it is pushed. After any autonomous burst in a `max`
-repo — a `/digest` auto-advance, a chained `/iterate`, a batch of
-`/ingest`s — **commit and `git push`** so the changes land on GitHub and
-the Pages site updates. Never leave committed-but-unpushed work at the end
-of an autonomous run; the SessionEnd auto-push is a backstop, not the
-primary mechanism. Push at each natural boundary (e.g. after each ingested
-paper), not only once at the very end, so progress is visible as it lands.
+In a `max` repo, ask before a burst of autonomous work, and again every
+few units inside one, because quota and GPU state move:
+
+```sh
+~/claude-system/coordinator/.venv/bin/claude-coordinator-agency --json
+```
+
+It returns `verdict` (`go`, `slow`, `hold`) and `aggressiveness` (`high`,
+`normal`, `low`, `none`), from reset-anchored token pacing (how far the
+weekly quota is spent against a pace that would use it exactly at reset)
+and live CPU/RAM/GPU and disk headroom. `suggested_session_tokens` is the
+advisory budget.
+
+| aggressiveness | batch |
+|---|---|
+| `high` | about 6 fetch→ingest items per burst; chain `/iterate` cycles |
+| `normal` | about 3; one `/iterate` cycle, re-check between units |
+| `low` | about 2, one at a time |
+| `hold` verdict | start nothing new, even mid-burst. Log why and stop; the next scheduled run resumes |
+
+This table is the canonical batch scale; skills refer to it.
+
+What `max` turns on, with the steps owned by each skill: `/digest` ingests
+its top candidates; `/curate` drains the standing backlog (a candidate file
+with no disposition is unfinished work); `/iterate` chains when the GPU is
+free (`hardware.gpu_free`); `/promote-moc` runs after an ingest burst and
+keeps its restraint (no thin MoCs because agency is `max`).
+
+GPU or multi-core runs follow the "Shared box" section of
+`~/.claude/CLAUDE.md`: ask for a window, launch attributed.
+
+## Persist the work
+
+The per-repo Pages site reads the live GitHub tree, so autonomous work is
+invisible until pushed. Commit and push at each natural boundary (each
+ingested paper, each curated file), not once at the end. The SessionEnd
+auto-push is a backstop.
 
 Stage by path: commit the files the work wrote, never `git add -A` or
 `commit -a`. Scheduled jobs and other sessions keep these repos dirty, and
 a sweep commits their half-written state under your message.
 
-## Hard limits that still bind under `max`
+## Hard limits under `max`
 
-Autonomy is bounded, not unbounded:
-
-- **`budget.yaml` ceilings are absolute** — `max_tokens`, `max_wall_hours`,
-  `max_experiments`, `max_consecutive_no_improvement`, `max_disk_gb`. Halt
-  when any is hit, regardless of verdict. `scripts/chain_budget.py`
-  evaluates them for `/iterate` chains. Nothing meters an ingest or curate
-  burst against them, so there the verdict and the batch-size scale above
-  are the limit.
-- **HCE still applies** — `test/` stays off-limits during search; see
-  `evaluation.md`. `max` agency never licenses touching the holdout.
-- **`hold` is absolute** — a `hold` verdict (weekly quota ≥90% spent, disk
-  critically low) stops new autonomous work even mid-burst.
+- **`budget.yaml` ceilings are absolute**: `max_tokens`, `max_wall_hours`,
+  `max_experiments`, `max_consecutive_no_improvement`, `max_disk_gb`.
+  `scripts/chain_budget.py` evaluates them for `/iterate` chains. Nothing
+  meters an ingest or curate burst against them, so there the verdict and
+  the batch scale are the limit.
+- **HCE still applies** (`evaluation.md`). `max` never licenses touching
+  the holdout.
+- **`hold` is absolute.**
