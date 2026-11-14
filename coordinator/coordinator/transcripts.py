@@ -171,6 +171,50 @@ def scan(t0: datetime, t1: Optional[datetime] = None) -> tuple[Usage, list[Recor
     return usage, records
 
 
+def session_usage(transcript: Path) -> tuple[Usage, dict]:
+    """Cumulative usage of ONE session, plus its tool-call histogram.
+
+    Covers the session transcript and its subagents' transcripts
+    (<transcript-stem>/subagents/*.jsonl) — a session that delegates spends
+    most of its tokens there. Deduped on (message.id, requestId) like scan():
+    one response is written as several records, each repeating its usage, so
+    a plain sum over records over-counts ~2.4x (measured 2026-11-14).
+    """
+    usage = Usage()
+    tools: dict = {}
+    seen: set = set()
+    seen_tools: set = set()
+    subagents = transcript.with_suffix("") / "subagents"
+    for path in [transcript, *sorted(subagents.glob("*.jsonl"))]:
+        try:
+            fh = path.open("rb")
+        except OSError:
+            continue
+        with fh:
+            for line in fh:
+                if b'"usage"' not in line:
+                    continue
+                try:
+                    d = json.loads(line)
+                except ValueError:
+                    continue
+                msg = d.get("message")
+                if not isinstance(msg, dict):
+                    continue
+                for c in msg.get("content") or []:
+                    if (isinstance(c, dict) and c.get("type") == "tool_use"
+                            and c.get("id") not in seen_tools):
+                        seen_tools.add(c.get("id"))
+                        name = c.get("name") or "?"
+                        tools[name] = tools.get(name, 0) + 1
+                key = (msg.get("id"), d.get("requestId"))
+                if key[0] and key in seen:
+                    continue
+                seen.add(key)
+                _record(d, usage)
+    return usage, tools
+
+
 def usage_between(t0: datetime, t1: Optional[datetime] = None) -> Usage:
     return scan(t0, t1)[0]
 
