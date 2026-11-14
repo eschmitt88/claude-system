@@ -28,6 +28,7 @@ import yaml
 
 TODAY = dt.date.today()
 WIKILINK_RE = re.compile(r"\[\[([^\]|#]+)(?:#[^\]|]*)?(?:\|[^\]]+)?\]\]")
+CODE_SPAN_RE = re.compile(r"`[^`]*`")
 ANCHOR_RE = re.compile(
     r"(\S+\.(?:py|qmd|json|yaml|csv|parquet):\S+"   # file:line / file:key refs
     r"|\[\[(?:literature|concepts)/[^\]]+\]\]"       # graph wikilinks
@@ -176,7 +177,16 @@ class Lint:
         stems = {p.stem for p in all_md}
         rels = {p.relative_to(self.root).with_suffix("").as_posix() for p in all_md}
         for p in all_md:
+            fenced = False
             for i, line in enumerate(p.read_text(errors="replace").splitlines(), 1):
+                # A wikilink inside a code span or fence is prose ABOUT the
+                # syntax (the template README's `[[wikilinks]]`), not a link.
+                if line.lstrip().startswith("```"):
+                    fenced = not fenced
+                    continue
+                if fenced:
+                    continue
+                line = CODE_SPAN_RE.sub("", line)
                 for m in WIKILINK_RE.finditer(line):
                     target = m.group(1).strip()
                     if target in rels or target.rsplit("/", 1)[-1] in stems:

@@ -37,7 +37,7 @@ sources: []
 tags: [demo]
 ---
 # sourceless-idea
-See [[missing-target]].
+See [[missing-target]]. Notes cross-link with `[[code-span-target]]` syntax.
 EOF
 echo "x" > "$P/raw/_candidates/2026-01-01-old.md"
 # stale-candidates is an obligation only in managed (agency: max) repos
@@ -67,6 +67,7 @@ check "kg_lint detects experiments mode"        "echo '$OUT' | grep -q '\"mode\"
 check "kg_lint finds orphan"                    "echo '$OUT' | grep -q orphan2020paper"
 check "kg_lint finds high-relevance orphan"     "echo '$OUT' | grep -q high_relevance_no_followup"
 check "kg_lint finds dead wikilink"             "echo '$OUT' | grep -q missing-target"
+check "kg_lint ignores wikilinks in code spans"  "! echo '$OUT' | grep -q code-span-target"
 check "kg_lint finds sourceless concept"        "echo '$OUT' | grep -q sourceless-idea"
 check "kg_lint finds stale candidate"           "echo '$OUT' | grep -q 2026-01-01-old"
 check "kg_lint finds unanchored claim"          "echo '$OUT' | grep -q 'worked great'"
