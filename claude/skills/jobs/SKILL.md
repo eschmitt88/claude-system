@@ -1,88 +1,55 @@
 ---
 name: jobs
-description: Schedule-aware headroom. /jobs shows what recurring jobs run on this box (systemd timers + crontab), what each costs (GPU VRAM, RAM, CPU, duration — learned passively from cgroup + journal telemetry), a forecast of the next 24-48h, and the earliest window where a proposed run fits. Also launches long runs as attributed transient units. Read-only except `run`. Wraps ~/claude-system/coordinator/.venv/bin/claude-coordinator-jobs.
+description: Schedule-aware headroom. Shows the recurring jobs on this box, what each costs (learned GPU/RAM/CPU/duration), a forecast, and the earliest window a proposed run fits; launches long runs as attributed, gated units. Use before any GPU or multi-core run longer than a few minutes.
 ---
 
 # jobs
 
-The box is shared with a fleet of scheduled jobs (nightly retrains, data
-harvests, monitors). Before spending GPU/CPU for more than a few minutes,
-look at what is about to run and plan around it. Nothing needs to be
-registered — the ledger is derived from systemd timers, the user crontab,
-cgroup v2 accounting and the journal.
-
-## Commands
+The box is shared with a fleet of scheduled jobs. Before spending GPU or
+CPU for more than a few minutes, see what is about to run and plan around
+it. Nothing has to be registered: the ledger is derived from systemd
+timers, the crontab, cgroup accounting and the journal.
 
 ```bash
 J=~/claude-system/coordinator/.venv/bin/claude-coordinator-jobs
-$J brief                      # 6-line notice (what session-start injects)
-$J now                        # running tracked jobs + who holds GPU memory
-$J forecast --hours 24        # predicted busy windows, running first
 $J window --gpu-gb 8 --ram-gb 20 --cores 4 --hours 2   # earliest slot that fits
-$J list                       # inventory + learned footprints + fail streaks
-$J profile <unit>             # one job: duration p90, VRAM/RAM p90, cores, reliability
-$J runs [<unit>] -n 20        # recent observed runs
-$J slot --gpu-gb 6 --hours 1  # best recurring daily start for a NEW scheduled job
-$J health                     # jobs failing repeatedly (exit 1 if any unacked)
-$J ack UNIT                   # you fixed a failing job: no alerts until its next run
-$J queue                      # gate: waiting jobs, held leases, recent decisions
-$J sync --backfill 14         # refresh inventory, re-read 14d of journal
+$J run --name <slug> --gpu-gb 8 --ram-gb 16 --hours 2 --log <path>.log -- python -u train.py
+$J forecast --hours 24        # predicted busy windows
+$J now                        # running jobs and who holds GPU memory
+$J slot --gpu-gb 6 --hours 1  # best daily start for a NEW scheduled job
+$J health                     # jobs failing repeatedly
+$J ack UNIT                   # you fixed one: no alerts until its next run
+$J queue                      # gate: waiting jobs, leases, recent decisions
 ```
 
-Add `--json` before the subcommand for structured output.
+`$J --help` lists the rest (`list`, `profile`, `runs`, `sync`, `brief`,
+the gate installers). `--json` goes before the subcommand.
+
+## What the output means
+
+- **`window`** checks VRAM (1 GB margin), RAM (8 GB margin) and cores (90%
+  of the box) against the peak overlap inside your span. `earliest_fit` is
+  the first start that passes; `least_bad` is the fallback when nothing
+  does. It is advisory: a scheduled job does not know about a run you
+  started by hand, and will start on top of it.
+- **`run`** puts the command in a transient user unit, so it is
+  cgroup-attributed, visible to every other session, and its footprint is
+  learned. It passes the capacity gate as class `agent`: it waits behind
+  production work and starts at once when it fits (`--no-gate` bypasses,
+  `--class` raises). With `--log` it detaches and returns; follow with
+  `tail -f` or `journalctl --user -u <unit> -f`. A failure pushes a
+  notification.
+- **Footprints** are p90 over recent successful runs. Forecast windows run
+  from `start ± RandomizedDelaySec` to `start + delay + p90 duration`,
+  conservative on purpose. `light` jobs are hidden from timelines.
 
 ## The capacity gate
 
-Heavy timer jobs are wrapped by `claude-coordinator-jobs gate` through
-systemd drop-ins generated from `~/.claude/jobs.yaml` (`install-gates`).
-The gate starts a job only when its envelope fits beside running leases
-and higher-priority jobs about to start; otherwise it waits (polling every
-45 s) up to a per-job `max_wait`, then runs anyway or skips per policy.
-Classes: `production` > `batch` > `agent`; same class is first-come. Small
-jobs that fit pass immediately. `run` goes through the same gate as class
-`agent` (use `--no-gate` to bypass, `--class` to raise). Every decision is
-in `queue`. Design: `docs/decisions/0002-capacity-gate.md`.
-
-## Launch long runs attributed
-
-```bash
-$J run --name <slug> --gpu-gb 8 --ram-gb 16 --hours 2 --log <path>.log -- python -u train.py
-```
-
-Runs the command in a transient user unit (`job-<slug>-<mmddHHMM>`), gated
-as class `agent`, so it queues behind production work, is cgroup-attributed,
-appears in `now`/`forecast`/`queue` for every other session, and its
-footprint feeds future profiles. A failure pushes an ntfy notice. With `--log` it detaches
-and returns immediately (`journalctl --user -u <unit> -f` or `tail -f`
-to follow); without, it blocks with stdio piped. Prints an advisory note
-if starting now conflicts with the forecast — it never blocks the launch.
-
-## Reading the output
-
-- **Footprints** are p90 over the newest successful runs: VRAM is exact
-  (NVML per-process, mapped to units via `/proc/<pid>/cgroup`); RSS is
-  `memory.peak`; cores = CPU-seconds / wall time. Runs only seen in the
-  journal (before the poller tracked them) carry box-level deltas instead
-  (`ΔRAM`, `est_vram`), measured on the "clean prefix" of the run — up to
-  the first other job that starts inside it. Once a job has live-attributed
-  runs, only those define RAM/VRAM; the deltas are a day-one bootstrap.
-- **Classes**: `gpu` / `cpu` / `ram` (joined with `+`) matter for planning;
-  `light` (bursts, negligible jobs) is hidden from timelines; `long-light`
-  (negligible footprint, long wall time) is shown as context only.
-- **Windows** are `start ± RandomizedDelaySec` to `start + delay + p90
-  duration`. Conservative on purpose.
-- `window` checks VRAM (1 GB margin), RAM (8 GB margin) and cores (90 %
-  of the box) against the peak overlap inside your span. `earliest_fit`
-  is the first candidate start (now, or the end of some forecast window)
-  that passes; `least_bad` is the fallback when nothing does.
-- **Advisory, not a gate.** If you start a GPU run anyway, expect the
-  scheduled job to still run — it does not know about you unless you
-  launched via `run`.
-
-## Optional annotations
-
-`~/.claude/jobs.yaml` (untracked; example in
-`~/claude-system/registry/jobs.example.yaml`) attaches `project`, `notes`,
-`ignore: true`, an `expect:` envelope for a job with no history yet, and
-the gate settings: `class`, `max_wait_h`, `on_timeout`, `memory_max`,
-`nice`, `io_weight`, `after`. Run `install-gates` after editing.
+Heavy timer jobs are wrapped by the gate through systemd drop-ins
+generated from `~/.claude/jobs.yaml` (`$J install-gates` after editing it;
+example in `~/claude-system/registry/jobs.example.yaml`). A gated job
+starts only when its envelope fits beside running leases and
+higher-priority jobs about to start; otherwise it waits up to its
+`max_wait`, then runs or skips per policy. Classes are `production` >
+`batch` > `agent`, first-come within a class. Design:
+`~/claude-system/docs/decisions/0002-capacity-gate.md`.

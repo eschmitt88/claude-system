@@ -1,6 +1,6 @@
 ---
 name: propose
-description: Strategic ideation for the active research project — no implementation. Reads concepts/, the 10 most recently modified literature notes, and the 5 most recent experiment READMEs + their metrics.json. Emits one proposal file at experiments/_proposals/YYYY-MM-DD-<slug>.md with flat YAML frontmatter (hypothesis, rationale, reads, expected_metric, design_sketch, risks, related_prior, estimated_runtime, status) plus a prose argument. --expand <proposal-path> [--n N] switches to breadth-first mode, emitting up to N (default 3) sibling proposals of an existing one under experiments/_proposals/_expansions/<parent-slug>/ with parent: and expansion_axis: frontmatter. Does not scaffold an experiment, write code, or touch dvc.yaml.
+description: Ideation only. /propose [concept-or-moc] writes one experiment proposal (falsifiable hypothesis, grounded rationale, expected metric, risks) to experiments/_proposals/. --expand <proposal> [--n N] writes up to N sibling proposals that test the same claim differently. No code, no scaffolding.
 respects:
   - ~/claude-system/claude/rules/evaluation.md
   - ~/claude-system/claude/rules/agency.md
@@ -10,133 +10,83 @@ respects:
 
 **First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
-Produce a single experiment proposal. This is the ideation half of the
-MLE-IDEATOR split: **no code, no scaffolding, no dvc.yaml edits**. The
-output is a decision document.
+Produce a decision document, not a run. This is the ideation half of the
+ideator/implementer split: no code, no scaffolding, no `dvc.yaml` or
+`config.yaml` edits, no subagent. A proposal stays in the main context so
+it can be argued with before compute is committed.
 
-## Arguments
+`/propose [<concept-or-moc>]` focuses on that concept or MoC (a name or a
+path); with no argument, on the tail of `NOTES.md`.
 
-- `[<concept-or-moc>]` — optional. A concept name, MoC name, or path under
-  `concepts/` or `mocs/`. If present, the proposal focuses on that theme.
-  If absent, synthesize from the active `NOTES.md` tail.
-- `--expand <proposal-path> [--n N]` — switch to expand mode (below):
-  breadth-first siblings of an existing proposal instead of one new
-  proposal. Mutually exclusive with the concept/MoC argument.
+## Ground it
 
-## Steps
+Read, and cite only what you read:
 
-1. **Gather context** — read the following, and nothing else from the
-   filesystem beyond templates:
-   - all files under `concepts/`
-   - the **10 most recently modified** `literature/**/*.md`
-   - the **5 most recent** `experiments/*/README.md` and each sibling
-     `metrics.json` (never `final_metrics.json` or `test/` —
-     `~/claude-system/claude/rules/evaluation.md`)
-   - the last 50 lines of `NOTES.md`
-   - `budget.yaml` at the project root (if present) — so
-     `estimated_runtime:` and `risks:` can be grounded against the
-     remaining headroom (wall hours, tokens, disk)
-   - if a concept/MoC argument was given, that file plus any files it
-     wikilinks to (one hop)
+- everything under `concepts/`;
+- the 10 most recently modified `literature/**/*.md`;
+- the 5 most recent `experiments/*/README.md` with each `metrics.json`
+  (never `final_metrics.json` or `test/`; `evaluation.md`);
+- the tail of `NOTES.md`, and `budget.yaml`, so runtime and risks are
+  judged against the remaining headroom;
+- the focus file and the files it links to, one hop.
 
-2. **Pick a slug**. Derive a short kebab-case slug from the core idea.
-   The proposal path is
-   `experiments/_proposals/YYYY-MM-DD-<slug>.md` using today's local
-   date. Create `experiments/_proposals/` if missing. Refuse if the
-   target path already exists.
+If that is too thin to ground a falsifiable hypothesis, say so and stop.
+Two competing ideas are two proposals, not one hedged proposal.
 
-3. **Draft the proposal** with this frontmatter (all flat YAML, no
-   nested schemas):
+## The proposal
 
-   ```yaml
-   ---
-   kind: proposal
-   slug: <slug>
-   date: YYYY-MM-DD
-   status: proposed
-   hypothesis: "<one-sentence falsifiable claim>"
-   rationale: "<≤5 sentences, grounded in cited notes>"
-   reads:
-     - "[[literature/papers/foo]]"
-     - "[[concepts/bar]]"
-   expected_metric:
-     name: <metric name>
-     target: <numeric target>
-     direction: higher-is-better  # or lower-is-better
-   design_sketch:
-     - <bullet 1>
-     - <bullet 2>
-   risks:
-     - <likely failure mode 1>
-     - <likely failure mode 2>
-   related_prior:
-     - <prior experiment slug this builds on or contradicts>
-   estimated_runtime: <e.g. "15 min on CPU", "2 h on single GPU">
-   ---
-   ```
+`experiments/_proposals/YYYY-MM-DD-<slug>.md` (refuse if it exists):
 
-   Every `reads:` entry must be a real file you actually opened in step 1
-   — no decorative citations. `related_prior:` slugs must match existing
-   `experiments/*/` folders.
+```yaml
+---
+kind: proposal
+slug: <slug>
+date: YYYY-MM-DD
+status: proposed
+hypothesis: "<one-sentence falsifiable claim>"
+rationale: "<≤5 sentences, grounded in cited notes>"
+reads:
+  - "[[literature/papers/foo]]"
+  - "[[concepts/bar]]"
+expected_metric:
+  name: <metric name>
+  target: <numeric target>
+  direction: higher-is-better  # or lower-is-better
+design_sketch:
+  - <bullet>
+risks:
+  - <likely failure mode>
+related_prior:
+  - <prior experiment slug this builds on or contradicts>
+estimated_runtime: <e.g. "15 min on CPU", "2 h on single GPU">
+---
+```
 
-4. **Write the body** below the frontmatter: a longer prose argument
-   (not bullets) explaining why this hypothesis is worth testing now,
-   what evidence from the cited notes motivates it, and how the
-   expected metric movement would update your beliefs. Keep it tight —
-   aim for 200–400 words.
+Flat YAML only. Every `reads:` entry is a file you opened, and every
+`related_prior:` slug is an existing `experiments/*/` folder. `status:`
+stays `proposed`.
 
-5. **Persist per the Confirmation principle** (`agency.md`): a proposal
-   is hypothesis selection — show the diff and confirm under
-   `agency: standard`; write and continue under `agency: max`. Do not
-   create any other files. Do not touch `dvc.yaml`, `config.yaml`, or
-   any experiment folder.
+Below it, 200–400 words of prose (not bullets): why this is worth testing
+now, what in the cited notes motivates it, and how the expected metric
+movement would change your beliefs.
 
-6. **After writing**, append one line to `_meta/log.md`:
-   `YYYY-MM-DD HH:MM propose <slug>`.
+**Persist** per the Confirmation principle (`agency.md`). A proposal is
+hypothesis selection: show it and confirm under `agency: standard`; write
+and continue under `agency: max`. Then append
+`YYYY-MM-DD propose <slug>` to `_meta/log.md`.
 
-## What this skill does NOT do
+## Expand mode: `--expand <proposal-path> [--n N]`
 
-- Does not run `/new-experiment`.
-- Does not write Python, configs, or DVC stages.
-- Does not spawn a subagent. Proposals are a main-context artifact so
-  you can argue with them before committing compute.
-- Does not set `status:` to anything other than `proposed`.
+Breadth on one hypothesis: up to N (default 3) sibling proposals that test
+the parent's claim through substantively different approaches
+(architecture, training regime, features, evaluation strategy, data scale,
+prior integration). N is a cap. Two children differing only in a
+hyperparameter waste a slot; write fewer and say so.
 
-## Expand mode (`--expand <proposal-path> [--n N]`)
-
-Breadth-first ideation on a single hypothesis (formerly the standalone
-`/expand` skill): emit up to N (default **3**) sibling proposals that
-test the parent's claim via substantively different approaches —
-architecture, training regime, feature engineering, evaluation
-strategy, data scale, prior integration. You pick the axes; genuine
-diversity is the bar. Treat N as a cap — two children differing only
-in a hyperparameter are wasted slots, so emit fewer and say so rather
-than pad.
-
-Deltas from the default mode:
-
-- The parent must live under `experiments/_proposals/` (not `_done/`,
-  not `_failed/`) with `status: proposed`. Read it in full plus the
-  files in its `reads:` (one hop) so children ground in the same
-  evidence. **Do not modify the parent** — it stays individually
-  implementable.
-- Each child is an ordinary proposal (same frontmatter keys, body
-  rules, and step-5 persistence as above; fresh `date:`,
-  `status: proposed`) plus two extra fields:
-  `parent: "<parent-slug>"` and
-  `expansion_axis: "<one-line label for what varies>"`.
-- Path: `experiments/_proposals/_expansions/<parent-slug>/<child-slug>.md`,
-  child slugs reflecting the axis (e.g. `…-ema`, `…-loss-mask`).
-- Log line: `YYYY-MM-DD HH:MM propose --expand <parent-slug> → <n> children`.
-
-Everything else — no scaffolding, no subagent, real `reads:` only, HCE
-discipline — applies unchanged. `/lint` flags children older than 7
-days with no `/implement` run.
-
-## Notes
-
-- If the context gathered in step 2 is too thin to ground a falsifiable
-  hypothesis, say so in plain English and stop — better to abort than
-  to fabricate rationale.
-- Proposals are cheap. If you have two competing ideas, emit two
-  separate proposals rather than hedging inside one.
+- The parent must be under `experiments/_proposals/` with
+  `status: proposed`. Read it and its `reads:`. Do not modify it.
+- Each child is an ordinary proposal plus `parent: "<parent-slug>"` and
+  `expansion_axis: "<what varies>"`, at
+  `experiments/_proposals/_expansions/<parent-slug>/<child-slug>.md`.
+- Log `YYYY-MM-DD propose --expand <parent-slug> → <n> children`.
+- `/lint` flags children older than 7 days that were never implemented.

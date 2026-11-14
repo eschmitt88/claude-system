@@ -1,6 +1,6 @@
 ---
 name: iterate
-description: One propose→implement loop cycle per invocation. Reads the latest implemented experiment's Diagnostics section, picks the strongest next_candidate, runs the /propose logic seeded with that candidate, presents the proposal, and confirms it per agency.md's Confirmation principle (pause under standard, continue under max) before calling /implement. --experiment <path> targets a specific experiment; --chain <N> repeats up to N times without pausing; --chain-until <cond> halts on a budget / metric / count threshold; --ensemble <slug...> [--strategy auto|voting|stacking|averaging] runs a single combination cycle over completed experiments sharing a metric (kind: ensemble, members: frontmatter). Reads budget.yaml as implicit halting conditions each cycle. Appends every cycle to _meta/iteration_log.md.
+description: One propose→implement cycle per call, seeded from the latest experiment's Diagnostics. --chain N / --chain-until <cond> run cycles unattended under budget.yaml ceilings; --ensemble <slugs> combines completed experiments. Logs every cycle to _meta/iteration_log.md.
 respects:
   - ~/claude-system/claude/rules/evaluation.md
   - ~/claude-system/claude/rules/agency.md
@@ -10,95 +10,68 @@ respects:
 
 **First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
-Drive the propose → implement → diagnose loop one step at a time, or
-in a chain under explicit halting conditions.
+Drive the propose → implement → diagnose loop one step at a time, or in a
+chain under explicit halting conditions. It orchestrates only: the single
+subagent in the loop is the one `/implement` spawns, and cycles run in
+sequence, never in parallel.
+
+Between cycles, read only each experiment's `metrics.json`, never
+`final_metrics.json` or `test/` (`evaluation.md`).
 
 ## Arguments
 
-- `--experiment <path>` — optional. Seed from this experiment's
-  Diagnostics instead of the most recent implemented one.
-- `--chain <N>` — optional. Run up to `N` full cycles without pausing
-  between them. Can coexist with `--chain-until`.
-- `--chain-until <condition>` — optional, repeatable. A halting
-  condition string of the form `<key>:<op>:<value>`. Multiple
-  conditions combine as **OR** — first to trip halts the chain.
-- `--ensemble <slug-1> <slug-2> ... [--strategy <name>]` — run a
-  single ensemble cycle over the named completed experiments instead
-  of seeding from Diagnostics (see Ensemble mode below). Strategy ∈
-  `auto | voting | stacking | averaging`, default `auto`. Not
-  combinable with `--chain`.
+- `--experiment <path>`: seed from this experiment instead of the most
+  recent implemented one.
+- `--chain <N>`: up to N cycles without pausing.
+- `--chain-until <key>:<op>:<value>`: repeatable; the first condition to
+  trip halts (e.g. `wall_hours:gte:8`, `metric:gte:0.92`). The grammar and
+  arithmetic live in `scripts/chain_budget.py`. For `metric`, the name
+  comes from the latest proposal's `expected_metric.name`.
+- `--ensemble <slug> <slug> … [--strategy auto|voting|stacking|averaging]`:
+  one combination cycle (below). Not combinable with `--chain`.
 
-### Chain-until conditions
+## One cycle
 
-Condition strings (`<key>:<op>:<value>`, e.g. `wall_hours:gte:8`,
-`metric:gte:0.92`) are evaluated by `scripts/chain_budget.py` — the
-grammar, the budget.yaml implicit-ceiling mapping, and the token/wall
-arithmetic live there. For `key=metric` the metric name is inferred
-from the most recent proposal's `expected_metric.name`.
+1. **Find the seed experiment**: `--experiment`, else the most recent with
+   `status: implemented`. If none exists yet, bootstrap: with exactly one
+   `status: proposed` proposal, run `/implement` on it as cycle 0 and
+   continue; with none, stop and suggest `/propose`; with several, ask
+   which.
 
-`--chain N` and `--chain-until` can coexist; either halting condition
-halts. A subagent hard failure always halts regardless of flags.
+2. **Read its `## Diagnostics`** and `metrics.json`. If the section is
+   missing or `intended_effect_confirmed` is empty, stop: the loop needs a
+   real diagnosis.
 
-## Evaluation discipline (HCE)
+3. **Pick the strongest `next_candidate`**: the one whose mechanism is most
+   directly implicated by `intended_effect_confirmed` and
+   `delta_from_prior`. Say why in a sentence.
 
-Between cycles, read **only** each completed experiment's
-`metrics.json` — never `final_metrics.json` or `test/`
-(`~/claude-system/claude/rules/evaluation.md`).
+4. **Write the proposal** exactly as `/propose` would, with that candidate
+   as the focus.
 
-## Steps (single cycle; default)
+5. **Confirm it.** Choosing a proposal is hypothesis selection (`agency.md`,
+   Confirmation principle): pause for approval under `agency: standard`;
+   continue under `agency: max` when the verdict is not `hold`.
 
-1. **Locate the seed experiment**:
-   - If `--experiment` was given, use it.
-   - Else find the experiment folder with the most recent
-     `status: implemented` (check frontmatter of
-     `experiments/*/README.md`).
-   - **Bootstrap case (no implemented experiment yet):** look for the
-     most recent proposal at `experiments/_proposals/*.md` with
-     `status: proposed`. If exactly one exists, auto-invoke
-     `/implement <proposal-path>` as cycle 0 and then continue from
-     step 1 (now there's an implemented experiment to seed from).
-     If zero proposals exist, abort and suggest running `/propose`
-     from scratch. If multiple, list them and ask the user which to
-     use. This removes the "`/iterate` aborts on a fresh project"
-     failure mode that bit the Phase 5 smoke test.
+6. **Run `/implement <proposal-path>`** and relay its summary.
 
-2. **Read its `## Diagnostics`** section and its `metrics.json`. If
-   the section is missing or `intended_effect_confirmed` is empty,
-   stop and tell the user — the loop needs a real diagnosis.
-
-3. **Pick the strongest `next_candidate`**. "Strongest" means: the
-   one whose mechanism is most directly implicated by
-   `intended_effect_confirmed` and `delta_from_prior`. If ambiguous,
-   state your reasoning in one sentence and pick.
-
-4. **Invoke the `/propose` logic with that candidate as the seed** —
-   use the candidate text as the focus argument. Produce the proposal
-   file exactly as `/propose` would.
-
-5. **Present the proposal.** Choosing it is hypothesis selection
-   (`agency.md`, Confirmation principle): pause for approval under
-   `agency: standard`; continue under `agency: max` when the verdict is
-   not `hold`.
-
-6. **Call `/implement <proposal-path>`** and relay its summary.
-
-7. **Append one line to `_meta/iteration_log.md`** — create the file
-   with a short header if missing:
+7. **Log** one line to `_meta/iteration_log.md` (create it with a short
+   header if missing):
 
    ```
-   YYYY-MM-DD HH:MM  <seed-slug>  →  <proposal-slug>  →  <experiment-slug>  Δ<metric>=<delta> band=<std|none>  budget{wall=<h>,tokens=<t>,experiments=<n>}
+   YYYY-MM-DD  <seed-slug>  →  <proposal-slug>  →  <experiment-slug>  Δ<metric>=<delta> band=<std|none>  budget{wall=<h>,tokens=<t>,experiments=<n>}
    ```
 
-   On a pivot cycle (below), append ` redirect=<axis>`.
+   On a pivot cycle, append ` redirect=<axis>`.
 
-## Steps (`--chain` / `--chain-until` mode)
+## Chains (`--chain`, `--chain-until`)
 
-Run cycles back-to-back without pausing for approval (step 5 is
-skipped). Each cycle performs steps 1-4, then 6, then 7.
+Cycles run back to back and step 5 does not pause, but still show each
+proposal and each experiment summary as you go, so the user can interrupt
+at a cycle boundary.
 
-### Before every cycle: budget check
-
-Run the halting evaluator, passing your chain-local counters:
+**Before every cycle**, run the halting evaluator with your chain-local
+counters:
 
 ```bash
 ~/claude-system/coordinator/.venv/bin/python \
@@ -109,94 +82,61 @@ Run the halting evaluator, passing your chain-local counters:
   [--metric-value <x>]
 ```
 
-It reads `budget.yaml`'s ceilings as implicit conditions, sums
-`_meta/token_log.ndjson` since chain start, checks disk against
-`max_disk_gb`, and returns `{halt, tripped, totals}`. Halt when it says
-halt, and name the tripped condition. Write one line per cycle to
-`_meta/iteration_log.md` with a `budget{...}` suffix from `totals` so
-the user can see the running numbers.
+It treats `budget.yaml`'s ceilings as implicit conditions, sums the token
+log since chain start, checks disk, and returns `{halt, tripped, totals}`.
+Halt when it says so and name the tripped condition. Put `totals` in the
+log line's `budget{…}`. With no `budget.yaml`, chain on the explicit flags
+only and log a warning on the first cycle.
 
-**What counts as an improvement.** `--consecutive-no-improvement` is the
-number of consecutive cycles whose metric did not beat the chain's best by
-more than the noise band. When either run used `--seeds N>1`, the band is the
-larger of the two `std` values its Diagnostics report. A single-run metric
-has no band, so a strictly positive delta counts as an improvement and the
-log line says `band=none`. Reset the counter only on an improvement beyond
-the band. A "new best" inside the band is a coin flip, and counting it
-stops `max_consecutive_no_improvement` from ever firing.
+The chain also halts when `--chain N` cycles are done, and always on an
+`/implement` hard failure. On halt, write a final log line naming the
+reason and report it.
+
+**What counts as an improvement.** `--consecutive-no-improvement` counts
+consecutive cycles that did not beat the chain's best by more than the
+noise band. When either run used `--seeds N>1`, the band is the larger of
+the two `std` values in their Diagnostics. A single-run metric has no band,
+so any strictly positive delta counts, and the log says `band=none`. Reset
+the counter only on an improvement beyond the band: a "new best" inside it
+is a coin flip, and counting it stops the ceiling from ever firing.
 
 **Pivot before the stall halt.** When the counter is one below
-`max_consecutive_no_improvement`, the next cycle must change the axis,
-not refine it. In step 3, reject any candidate that keeps the stalled
-cycles' backbone, representation, objective and validation scheme. Pick
-one that changes at least one of them, or reopen a `next_candidate` an
-earlier cycle in this chain passed over, and name the changed axis in
-one sentence. Judge the pivot against the chain's best, under the same
-band; if it also fails to improve, the counter reaches the ceiling and
-the chain halts as before. With a ceiling of 1, or no `budget.yaml`,
-there is no pivot cycle. (Agents left alone refine the stalled axis:
-expert humans pivot on ~25% of transitions, single-loop agents on ~9%,
-and a "consider something different" nudge does not close the gap.)
+`max_consecutive_no_improvement`, the next cycle must change the axis, not
+refine it. In step 3, reject any candidate that keeps the stalled cycles'
+backbone, representation, objective and validation scheme. Pick one that
+changes at least one of them, or reopen a `next_candidate` an earlier
+cycle in this chain passed over, and name the changed axis in a sentence.
+Judge the pivot against the chain's best under the same band. If it also
+fails, the counter reaches the ceiling and the chain halts as before. With
+a ceiling of 1, or no `budget.yaml`, there is no pivot cycle. (Left alone,
+agents refine the stalled axis, and a "consider something different" nudge
+does not change that.)
 
-If budget.yaml is missing (`budget_present: false`), chain on explicit
-`--chain N` / `--chain-until` only; log a warning on the first cycle.
+## Ensemble mode
 
-### Halt conditions (any triggers a stop)
+One cycle whose proposal is "combine these members". Combining genuinely
+diverse members on one metric is among the most reliable sources of
+headroom in autonomous ML loops (MLE-STAR). Two seeds of one config is
+noise reduction, not ensembling; that is `/implement --seeds N`.
 
-- Any `--chain-until` condition becomes true.
-- `--chain N` cycles have all completed.
-- Any `budget.yaml` implicit condition becomes true.
-- An `/implement` call returns a hard failure (subagent error or
-  missing `metrics.json`). Always halts regardless of flags.
-
-On halt, write one final line to `_meta/iteration_log.md` naming the
-halting reason and report it to the user.
-
-## Ensemble mode (`--ensemble <slug...> [--strategy <name>]`)
-
-One cycle whose "proposal" is *combine these members* (formerly the
-standalone `/ensemble` skill). Motivated by MLE-STAR (arXiv
-2506.15692): combining genuinely diverse members that target the same
-metric is one of the most reliable sources of headroom in autonomous
-ML loops. Two seeds of one config is noise reduction, not ensembling —
-that's `/implement --seeds N`.
-
-- **Members**: two or more experiments with `status: implemented` (or
-  `done`) sharing the same primary metric and validation split (the
-  HCE consistency clause). Read each member's README frontmatter,
-  `metrics.json` (**never** `final_metrics.json` — ensembling is
-  search-phase), and `results/` for per-example predictions
-  (`predictions.parquet`, `val_preds.csv`, or similar). Refuse — don't
-  fabricate, don't silently fall back to a weaker strategy — if any
-  member is missing, still running, metric-mismatched, or lacks the
-  predictions a strategy needs; name the offender.
-- **Strategy** (when `auto`): predictions + continuous metric →
-  averaging (or a learned blend if a held-out meta-split cleanly
-  exists); classification → voting (soft when probabilities are
-  present) or stacking with a clean meta-split. State the choice and
-  reasoning in one sentence in the new README's `## Setup`.
-- **Execution**: scaffold via `/new-experiment` with a slug naming the
-  members compactly (e.g. `ensemble-mlp-xgb`). README frontmatter
-  gains `kind: ensemble`, a `members:` list of slugs, and
-  `strategy:`. `config.yaml` points at member predictions;
-  `notes.qmd` computes the combined metric reproducibly. Run in the
-  main agent (ensembling is cheap — no subagent) and write the
-  combined number to the new experiment's `metrics.json` under the
-  members' metric name.
-- **Diagnostics**: fill honestly, as any cycle — did the combination
-  beat the best single member on validation and by how much (cite
-  `metrics.json`), which member drags, what to try next. A failed
-  ensemble is useful signal; mark `intended_effect_confirmed: no`.
-- **Logs**: `_meta/log.md` gets
-  `YYYY-MM-DD HH:MM iterate --ensemble <members...> → <slug> Δ<metric>=<delta>`,
-  plus the usual `_meta/iteration_log.md` line.
-
-## Constraints
-
-- This skill **does not** spawn a subagent itself. The only subagent
-  in the loop is the one `/implement` spawns. `iterate` orchestrates;
-  it does not execute.
-- Cycles must be sequential, not parallel. No fan-out.
-- In `--chain` / `--chain-until` mode, still show each proposal and
-  each experiment summary to the user as you go — they should be able
-  to interrupt at any cycle boundary.
+- **Members**: two or more experiments with `status: implemented` or
+  `done`, sharing the primary metric and the validation split. Read each
+  one's frontmatter, `metrics.json` and the per-example predictions under
+  `results/`. If a member is missing, still running, on a different
+  metric, or lacks the predictions the strategy needs, refuse and name it.
+  Don't fall back to a weaker strategy silently.
+- **Strategy** under `auto`: continuous metric → averaging (or a learned
+  blend if a clean held-out meta-split exists); classification → voting
+  (soft when probabilities exist) or stacking with a clean meta-split.
+  State the choice in the new README's `## Setup`.
+- **Run it in the main agent** (it is cheap): scaffold with
+  `/new-experiment` under a slug naming the members
+  (`ensemble-mlp-xgb`); README frontmatter gains `kind: ensemble`,
+  `members:` and `strategy:`; `config.yaml` points at the member
+  predictions; `notes.qmd` computes the combined metric reproducibly;
+  write it to `metrics.json` under the members' metric name.
+- **Diagnose honestly**: did it beat the best single member on validation,
+  by how much, which member drags. A failed ensemble is signal:
+  `intended_effect_confirmed: no`.
+- **Log** `YYYY-MM-DD iterate --ensemble <members...> → <slug> Δ<metric>=<delta>`
+  in `_meta/log.md`, plus the usual iteration-log line.

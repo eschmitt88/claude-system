@@ -1,6 +1,6 @@
 ---
 name: implement
-description: Execute a proposal inside a fresh subagent — the MLE-IDEATOR separation boundary, and the only subagent in the experiment loop. The subagent runs /new-experiment, writes code + config.yaml, executes dvc exp run, captures metrics and results, then writes a structured Diagnostics section to README.md. On success, files the proposal under experiments/_proposals/_done/ with status: implemented; on hard failure, files it under _proposals/_failed/ with the captured error. Supports --seeds N for pass@k multi-seed runs and --implementer-model <slug> to pick the subagent model (default from budget.yaml).
+description: /implement <proposal-path> runs a proposal in a fresh subagent (the ideator/implementer boundary, and the experiment loop's only subagent): scaffolds the experiment, writes code, runs it, records metrics and a Diagnostics section, then files the proposal under _done/ or _failed/. --seeds N for multi-seed runs; --implementer-model to choose the subagent model.
 respects:
   - ~/claude-system/claude/rules/evaluation.md
 ---
@@ -9,175 +9,103 @@ respects:
 
 **First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
-Turn a proposal into a run. This is the only point in the experiment
-loop that spawns a subagent: the implementer sees the proposal and the
-rules, and none of the ideation that led to it.
+Turn a proposal into a run, inside one fresh subagent. The implementer
+sees the proposal and the rules, and none of the ideation that led to it,
+so it executes the hypothesis without re-arguing it.
 
 ## Arguments
 
-- `<proposal-path>` — path to a file under `experiments/_proposals/`
-  (or `experiments/_proposals/_expansions/<parent>/`). Required.
-  Refuse if the file does not exist or its frontmatter `status:` is
-  anything other than `proposed`.
+- `<proposal-path>`: a file under `experiments/_proposals/` (or its
+  `_expansions/<parent>/`) with `status: proposed`. Refuse anything else.
+- `--seeds <N>`: run N times with different seeds and report `mean ± std`
+  in `metrics.json` and Diagnostics. The same config genuinely finds
+  different optima per seed (MLE-bench pass@1 16.9% → pass@8 34.1%), so an
+  aggregate is more honest than one number. Default 1.
+- `--implementer-model <slug>`: the subagent's model. Precedence: this
+  flag, then `models.implementer` in `budget.yaml`, then the main
+  session's model. Aliases (`opus`, `sonnet`, `haiku`) and concrete IDs
+  both work; pass it straight to the Agent tool's `model` parameter.
 
-- `--seeds <N>` — optional. Run the experiment `N` times with
-  different seeds and report aggregated metrics as `mean ± std` in
-  `metrics.json` and in the Diagnostics section. The Diagnostics
-  `intended_effect_confirmed` and `overfitting_signal` fields reflect
-  the aggregated view, not any single seed. Motivated by MLE-bench's
-  pass@k result (o1-preview: pass@1 16.9% → pass@8 34.1%): the same
-  config run with different seeds genuinely finds different local
-  optima, and a mean±std report is more honest signal than a single
-  number.
+## The subagent's brief
 
-  The subagent exposes the seed either via `config.yaml` `seed:` (the
-  default template field) or a CLI arg, whichever the experiment's
-  entry point consumes. N=1 is the no-op default.
+Spawn exactly one `general-purpose` subagent, with the resolved model. One
+per invocation: no fan-out and no retry loop. Multi-phase or multi-seed
+work is sequenced inside it.
 
-- `--implementer-model <slug>` — optional. Model for the implementer
-  subagent. Resolution order, highest precedence first:
+Give it these inputs and nothing else from this conversation (no
+transcript, no other proposals):
 
-  1. this CLI flag
-  2. the project's `budget.yaml` field `models.implementer`
-  3. the main-session model (inherited)
+- the full proposal;
+- `~/.claude/CLAUDE.md` and the project's `CLAUDE.md`;
+- `~/claude-system/claude/rules/evaluation.md`, and any `.claude/rules/*.md`
+  that covers `experiments/**` or paths the proposal will touch, in full;
+- the `hardware:` block of `budget.yaml`.
 
-  The template default is `opus` for both roles — a floating alias that
-  resolves to the latest Opus release, so the box tracks new Opus
-  versions without edits. Pass the slug straight through to the Agent
-  tool's `model` parameter, which accepts `opus`/`sonnet`/`haiku` aliases
-  as well as concrete IDs (e.g. `claude-opus-4-8`). A capability- or
-  cost-split config (e.g. a `haiku`/`sonnet` implementer, or a pinned
-  version for reproducibility) slots in by editing `budget.yaml` alone —
-  no skill rewrite. Motivated by R&D-Agent's hybrid-backend pattern.
+And tell it:
 
-## Steps
+- It is the implementer; the main agent is the ideator. Execute the
+  hypothesis; do not re-argue it.
+- If the project is under HCE: `test/` is off-limits, `metrics.json` is the
+  validation-split search signal, and `final_metrics.json` is never
+  written during search.
+- Work in `experiments/YYYY-MM-DD-<slug>/` if it already exists; otherwise
+  create it with `/new-experiment <slug>`.
+- Write the code, edit `config.yaml`, run it (`dvc exp run`), write
+  `metrics.json` and populate `results/`.
+- With `--seeds N`: seeds `42 … 42+N-1` (or its own choice, recorded in
+  `config.yaml`), per-seed results in `results/per_seed.json`, aggregated
+  mean and std in `metrics.json`.
+- Write the `## Diagnostics` section below into the experiment's
+  `README.md`.
+- Do not write to `_meta/log.md`; the main agent logs.
+- Return a summary of at most 200 words. No logs.
 
-1. **Resolve the proposal path** in the active project.
+If the implementer is a smaller model than the one that wrote the proposal
+(`haiku` or `sonnet` under an Opus or Fable ideator), also spell out what a
+peer would work out alone: the entry point to write, the exact command
+that produces `metrics.json`, and where each required output goes.
 
-2. **Read `budget.yaml`** at the project root (if present). Use it to
-   resolve `--implementer-model`'s default and to surface the
-   hardware hints to the subagent in step 3. If `budget.yaml` is
-   missing, inherit the main-session model and skip the hardware
-   block.
+## Diagnostics (the contract `/iterate`, `/wrap`, `/lint` and the dashboard read)
 
-3. **Assemble the subagent prompt.** Include **only** these inputs
-   (nothing else from the current conversation):
+```markdown
+## Diagnostics
 
-   a. The full text of the proposal file.
-   b. `~/.claude/CLAUDE.md` (durable principles).
-   c. The project-root `CLAUDE.md`.
-   d. `~/claude-system/claude/rules/evaluation.md` (the HCE rule — non-negotiable).
-   e. Any other `.claude/rules/*.md` whose scope covers
-      `experiments/**` or paths the proposal will touch. Include each
-      file's full text.
-   f. The resolved `budget.yaml` hardware block (plain YAML).
+- intended_effect_confirmed: <yes | no | partial> — <one-line evidence with anchor>
+- leakage_check: <method used> — <finding>
+- overfitting_signal: train=<x> val=<y> gap=<z> — <interpretation> (from metrics.json)
+- delta_from_prior: vs <related_prior_slug>, <metric_delta> attributed to <cause> (metrics.json)
+- unexpected_findings: <one or two sentences, or "none">
+- seeds_run: <list of seeds | "1 (single run)">
+- metric_aggregation: <"single-run" | "mean ± std over N seeds">
+- next_candidates:
+  - <one-sentence proposal 1>
+  - <one-sentence proposal 2>
+```
 
-   Prepend a short preamble telling the subagent:
-   - You are the IMPLEMENTER. The main agent is the IDEATOR. Do not
-     re-argue the hypothesis — execute it. (Label it MLE when the
-     proposal is ML work, but the contract is the same regardless
-     of domain: literature triage, scraping, analysis, ML — all
-     valid.)
-   - If the project opts into HCE (see
-     `~/claude-system/claude/rules/evaluation.md`): `test/` is off-limits,
-     `metrics.json` is the search signal, `final_metrics.json` is
-     never written during search. Skip this clause entirely for
-     projects without an evaluation holdout.
-   - **Idempotency**: if the experiment folder at
-     `experiments/YYYY-MM-DD-<slug>/` already exists (because
-     `/mle-task`, `/new-experiment`, or another upstream skill
-     scaffolded it), **skip `/new-experiment`** and work in the
-     existing folder. Otherwise run `/new-experiment <slug>` with
-     `<slug>` from the proposal frontmatter.
-   - You may write code, edit `config.yaml`, and run `dvc exp run`.
-   - You must capture `metrics.json` (validation) and populate
-     `results/`.
-   - If `--seeds N` was passed: run the experiment N times with the
-     seeds `[42, 43, ..., 42+N-1]` (or a set of your choice,
-     recorded in `config.yaml`), collect per-seed `metrics.json`-style
-     dicts into `results/per_seed.json`, and write aggregated
-     mean/std into the top-level `metrics.json`.
-   - You must write a `## Diagnostics` section into the experiment's
-     `README.md` with the exact fields in step 5 below, anchoring
-     every concrete claim to a file:line or metrics path.
-   - **Do not write to `_meta/log.md`.** The main agent owns logging
-     and will append the canonical line after you return.
-   - Return a ≤200-word summary to the parent. Do not dump logs.
+At least two `next_candidates`. Every concrete claim carries an anchor
+(`train.py:42-58`, `metrics.json:val_acc`, a `[[literature/...]]` link, a
+`notes.qmd` cell label); `/lint` flags unanchored claims.
 
-   If the resolved implementer is a smaller model than the one writing
-   the proposal (a `haiku`/`sonnet` implementer under an Opus or Fable
-   ideator), add what a peer would work out alone: the entry point to
-   write, the exact command that produces `metrics.json`, and where
-   each required output goes. Smaller models lose more from an
-   unstated step than a peer does.
+## When it returns
 
-4. **Spawn exactly one subagent** via the Agent tool (subagent_type:
-   `general-purpose`), passing the resolved model slug via the `model`
-   parameter. One per invocation — no fan-out, no retry loop.
+**Success:**
 
-5. **The subagent must emit a `## Diagnostics` section** with these
-   fields (flat, one line each except `next_candidates`):
+- Move the proposal to `experiments/_proposals/_done/YYYY-MM-DD-<slug>.md`
+  (expansion children too, so `/iterate` finds them beside their
+  siblings). Set `status: implemented` and add
+  `experiment: experiments/YYYY-MM-DD-<slug>/`.
+- Log `YYYY-MM-DD implement <slug> → experiments/YYYY-MM-DD-<slug>/ seeds=<N> model=<slug>`.
+- Relay the subagent's summary verbatim.
 
-   ```markdown
-   ## Diagnostics
+**Hard failure** (the subagent errored, the run crashed, or `metrics.json`
+is missing):
 
-   - intended_effect_confirmed: <yes | no | partial> — <one-line evidence with anchor>
-   - leakage_check: <method used> — <finding>
-   - overfitting_signal: train=<x> val=<y> gap=<z> — <interpretation> (from metrics.json)
-   - delta_from_prior: vs <related_prior_slug>, <metric_delta> attributed to <cause> (metrics.json)
-   - unexpected_findings: <one or two sentences, or "none">
-   - seeds_run: <list of seeds | "1 (single run)">
-   - metric_aggregation: <"single-run" | "mean ± std over N seeds">
-   - next_candidates:
-     - <one-sentence proposal 1>
-     - <one-sentence proposal 2>
-   ```
+- Move the proposal to `experiments/_proposals/_failed/`. Set
+  `status: failed` and add `error: "<one line>"`,
+  `attempted_at: YYYY-MM-DD` and `model: <slug>`.
+- Log `YYYY-MM-DD implement-failed <slug>: <error>`.
 
-   At least two `next_candidates` are required; more are welcome.
-   Every concrete claim must carry an anchor — `train.py:42-58`,
-   `metrics.json:val_acc`, a `[[literature/...]]` wikilink, or a
-   `notes.qmd:cell-label`. Unanchored claims are flagged by `/lint`.
+Filing either way is an artifact write: no confirmation gate.
 
-6. **On subagent return (success)**:
-
-   - Move the proposal to
-     `experiments/_proposals/_done/YYYY-MM-DD-<slug>.md`.
-     (Expansion children are moved out of
-     `_expansions/<parent>/` into `_done/` so `/iterate` finds them
-     alongside their siblings.)
-   - Update its frontmatter: `status: implemented` and add
-     `experiment: experiments/YYYY-MM-DD-<slug>/`.
-   - Append to `_meta/log.md`:
-     `YYYY-MM-DD HH:MM implement <slug> → experiments/YYYY-MM-DD-<slug>/ seeds=<N> model=<slug>`.
-   - Relay the subagent's ≤200-word summary to the user verbatim.
-   - The proposal move/update is an artifact write (filing a completed
-     run) — no confirmation gate; show the diff of what changed.
-
-7. **On subagent return (hard failure)** — the subagent exited with
-   an error, the run crashed, or `metrics.json` is missing:
-
-   - Move the proposal to
-     `experiments/_proposals/_failed/YYYY-MM-DD-<slug>.md`.
-   - Update frontmatter: `status: failed`, add
-     `error: "<captured one-line error>"`,
-     `attempted_at: YYYY-MM-DD HH:MM`, and
-     `model: <resolved implementer model slug>`.
-   - Append to `_meta/log.md`:
-     `YYYY-MM-DD HH:MM implement-failed <slug>: <error>`.
-   - Artifact write (filing a failed run) — no confirmation gate; show
-     the diff of what changed.
-
-## Constraints
-
-- **One subagent per invocation.** If the run needs multiple phases,
-  the subagent sequences them internally. `--seeds N > 1` is a single
-  invocation; the subagent handles the loop internally.
-- **No subagent context leakage.** Do not pass the current
-  conversation transcript, other proposals, or unrelated project
-  files into the prompt. The listed inputs in step 3 are the whole
-  allow-list.
-- **Do not re-open the hypothesis.** If you (the main agent) now
-  disagree with the proposal, stop and say so rather than silently
-  editing it. Proposals are edited via `/propose`, not `/implement`.
-- **HCE rule** — the subagent must not read `test/` and must not write
-  `final_metrics.json`. See `~/claude-system/claude/rules/evaluation.md`.
+If you now disagree with the proposal, stop and say so. Proposals are
+changed through `/propose`, never edited here.

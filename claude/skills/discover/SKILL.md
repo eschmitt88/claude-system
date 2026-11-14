@@ -1,6 +1,6 @@
 ---
 name: discover
-description: Web-grounded literature triage. /discover <topic> [--n N] uses WebSearch and WebFetch to surface recent papers, repos, and posts on a topic, then writes a single ranked triage file to raw/_candidates/YYYY-MM-DD-<slug>.md. Each entry has title, URL, source type, one-line summary, and the reasoning for inclusion. Default N=10. Does not fetch full PDFs — /fetch-paper does that.
+description: Web-grounded literature triage. /discover <topic> [--n N] searches for recent papers, repos and posts on a topic and writes one ranked candidates file to raw/_candidates/. Does not fetch or ingest.
 respects:
   - ~/claude-system/claude/rules/evaluation.md
   - ~/claude-system/claude/rules/agency.md
@@ -10,97 +10,57 @@ respects:
 
 **First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
-Surface candidate reading on a topic. The goal is a short, ranked list
-for `/curate` (or the user) to act on — a triage, not a library dump.
+Triage a topic into a short ranked list for `/curate` (or the user) to act
+on. It is web-grounded on purpose: the model's priors are stale, the web is
+not.
 
-Motivated by MLE-STAR (arXiv 2506.15692) and related work finding that
-web-retrieval-grounded agents consistently outperform agents relying
-only on the LLM's training-time knowledge. The model's priors are
-stale; the web is not.
+`/discover <topic> [--n N]`, inside a project. `N` caps the entries
+(default 10).
 
-## Arguments
+## Output
 
-- `<topic>` — free-text topic or question. Required. Quote if
-  multi-word.
-- `--n <N>` — optional. Maximum entries in the triage file.
-  Default **10**.
+`raw/_candidates/YYYY-MM-DD-<topic-slug>.md`:
 
-## Steps
+```markdown
+---
+kind: candidates
+topic: "<topic as given>"
+discovered: YYYY-MM-DD
+source: discover
+n_requested: <N>
+n_returned: <actual count>
+---
 
-1. **Refuse if the cwd is not inside a project** — `discover` writes
-   into a project.
+## 1. <Title>
 
-2. **Search**. Use `WebSearch` with one or two focused queries for the
-   topic. When a result is plausibly relevant, use `WebFetch` to pull
-   enough of the page to write a defensible one-line summary. Prefer
-   primary sources (arXiv abstract pages, GitHub READMEs, original
-   blog posts) over aggregators. Record per entry whether you read the
-   page or only a search snippet: snippet-only numbers and arXiv IDs are
-   often wrong, and `/curate` needs to know which to re-check.
+- url: <URL>
+- type: paper | repo | post | talk
+- summary: <one sentence>
+- reason: <one sentence on why this made the cut for this project>
+- verified: page | snippet
+```
 
-3. **Rank**. Use your judgment. What matters: recency, fit to the
-   stated topic, fit to the project's current direction (skim
-   `concepts/`, the last 50 lines of `NOTES.md`, and the most recent
-   `experiments/*/README.md` frontmatter before deciding), and
-   diversity of viewpoint. No hardcoded scoring formula — decide the
-   way a good reviewer would and justify each inclusion in one
-   sentence.
+One `##` block per entry, in rank order. The dashboard parses this shape.
 
-4. **Write the triage file** to
-   `raw/_candidates/YYYY-MM-DD-<topic-slug>.md`. Create the directory
-   if missing. Use this frontmatter (flat YAML):
+- **Search** with one or two focused queries and fetch a page when a result
+  looks relevant. Prefer primary sources (arXiv abstract pages, READMEs,
+  original posts) over aggregators.
+- **`verified`** says whether you read the page or only a search snippet.
+  Snippet-only numbers and arXiv IDs are often wrong, and `/curate`
+  re-checks those entries.
+- **Rank** as a good reviewer would: recency, fit to the topic, fit to the
+  project's direction (skim `concepts/`, the tail of `NOTES.md`, recent
+  experiment READMEs), diversity of viewpoint.
+- If nothing credible turns up, still write the file with `n_returned: 0`
+  and say so in the body.
 
-   ```yaml
-   ---
-   kind: candidates
-   topic: "<topic as given>"
-   discovered: YYYY-MM-DD
-   source: discover
-   n_requested: <N>
-   n_returned: <actual count>
-   ---
-   ```
+Append `YYYY-MM-DD discover <topic-slug> n=<count>` to `_meta/log.md`.
+Commit and push, staging what you wrote by path (never `git add -A`: it sweeps in whatever else is dirty). When several `/discover` runs share a repo at once, the caller
+commits for all of them (parallel commits race on the index).
 
-   Body format — one `##` heading per entry, in rank order:
+## Scope
 
-   ```markdown
-   ## 1. <Title>
-
-   - url: <URL>
-   - type: paper | repo | post | talk
-   - summary: <one sentence>
-   - reason: <one sentence on why this made the cut for this project>
-   - verified: page | snippet
-   ```
-
-5. **Append to `_meta/log.md`**:
-   `YYYY-MM-DD HH:MM discover <topic-slug> n=<count>`.
-
-6. **Commit** — an artifact write, no confirmation gate. Stage the
-   files this skill wrote by path (never `git add -A`: it sweeps in
-   whatever else is dirty), commit, and push. Message:
-   `discover YYYY-MM-DD: <topic-slug> n=<count>`. When several
-   `/discover` runs share a repo at once, the caller commits for all of
-   them instead (parallel commits race on the index).
-
-## What this skill does NOT do
-
-- Does not download full PDFs. That is `/fetch-paper`'s job, run on the
-  entries that survive curation.
-- Does not create a standing obligation. In an `agency: standard` repo
-  the candidates file is a triage note to use if and when useful —
-  `/lint` tracks backlog staleness only in `agency: max` repos, where
-  the nightly `/curate` sweep actually drains it.
-- Does not create literature notes. That happens later via `/ingest`.
-- Does not write to `literature/`, `concepts/`, or any experiment
-  folder.
-- Does not fabricate results. If `WebSearch` returns nothing credible,
-  write a candidates file with `n_returned: 0` and say so in the body.
-
-## Notes
-
-- `raw/_candidates/` is a staging area, not permanent storage; `/curate`
-  archives a resolved file to `raw/_candidates/_done/`.
-- If `N` is very large, consider delegating the search to the
-  Explore agent to keep the main context clean. The triage file is
-  still written by the main agent.
+Write only the candidates file and the log line. Fetching is
+`/fetch-paper`, notes are `/ingest`, closing the file is `/curate`. In an
+`agency: standard` repo the file creates no obligation; only `agency: max`
+repos track and drain the backlog.

@@ -1,6 +1,6 @@
 ---
 name: promote-moc
-description: Promote a ripe cluster of related concepts into a Map of Content at mocs/<theme>.md. Detects clusters of >=5 related concepts on a theme that are not already substantially covered by an existing MoC, then synthesizes the MoC (framing + layered organization + concept wikilinks) from the concept files. In standard repos it proposes and waits; in `agency: max` repos it creates, commits, and pushes autonomously. This is the "act on it" counterpart to /lint's MoC-candidate detection.
+description: Promote a ripe cluster of ≥5 related concepts that no existing MoC covers into mocs/<theme>.md. Declines thin or redundant clusters. Proposes and waits in standard repos; creates, commits and pushes in agency max repos.
 respects:
   - ~/claude-system/claude/rules/agency.md
 ---
@@ -10,83 +10,57 @@ respects:
 **First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
 Turn an accumulating cluster of concepts into a navigable Map of Content.
-The framework's rule (user `CLAUDE.md`): "when >=5 related concepts
-accumulate on a theme, promote them to a `mocs/<theme>.md`." `/lint`
-*detects* ripe clusters; this skill *creates* the MoC.
+`/lint` detects ripe clusters; this creates the MoC.
 
-## Arguments
+`/promote-moc [theme]`: force a theme or tag, or with no argument pick the
+ripest cluster (or report that none is ripe). Needs a `concepts/`
+directory.
 
-- `<theme>` — optional. Force-promote a specific theme/tag (e.g.
-  `/promote-moc agent-memory`). With no argument, auto-detect the ripest
-  cluster and promote it (or report that none is ripe).
+## Ripeness
 
-## Ripeness — when to promote (and when NOT to)
+A cluster is ripe only when both hold:
 
-A cluster is **ripe** only when BOTH hold:
+1. **≥5 related concepts** on one coherent theme. Group `concepts/*.md` by
+   shared `tags:`, merging near-synonym tags with judgment.
+2. **Not already mapped.** No existing `mocs/*.md` covers half or more of
+   the cluster. If one does, update that MoC instead, or split it only when
+   the sub-theme has clearly outgrown the parent.
 
-1. **>=5 related concepts.** Group `concepts/*.md` by shared `tags:` (merge
-   near-synonym tags with judgment — e.g. `memory` + `procedural-memory`).
-   The cluster is the set of concepts on one coherent theme.
-2. **Not already mapped.** No existing `mocs/*.md` already covers a
-   majority (>= half) of the cluster's concepts. A new MoC that would
-   duplicate an existing one is **not** ripe — prefer updating the
-   existing MoC's `concepts:` and sources instead, or splitting it only
-   when the sub-theme has clearly outgrown the parent.
-
-If nothing is ripe, say so and stop. Do **not** manufacture a thin or
-redundant MoC to have something to do — a 3-concept "cluster", or one
-whose concepts already live in another MoC, stays un-promoted. This
-restraint is the point: the value is in real structure, not MoC count.
+If nothing is ripe, say so and stop. A thin or redundant MoC made to have
+something to show is worse than none: the value is in real structure, and
+an overlapping map costs every later reader.
 
 ## Steps
 
-1. **Refuse if the active project has no `concepts/`.**
+1. **Detect.** List each candidate cluster with its concept count and its
+   overlap with existing MoCs, including the ones you decline and why.
 
-2. **Detect** per the ripeness test above. List every candidate cluster
-   with its concept count and overlap with existing MoCs, then pick the
-   ripest un-mapped one (or the `<theme>` argument if given). Report what
-   you found, including clusters you are **declining** and why.
+2. **Write `mocs/<theme>.md`** from the concept files themselves, not from
+   memory, matching an existing MoC in the project if there is one:
+   - frontmatter `kind: moc`, `name`, `status: active`, `added: <today>`,
+     a `concepts:` list of `[[concepts/<slug>]]` links (each must exist),
+     and `tags:` including `moc` and the theme;
+   - a framing paragraph: the question this theme answers and why these
+     concepts belong together;
+   - 2–4 subsections grouping concepts by role, each concept with a
+     one-line job and its link, citing the `[[literature/...]]` sources
+     that anchor the theme;
+   - an open thread or hypothesis, if one is evident.
 
-3. **Synthesize `mocs/<theme>.md`** — match the structure of any existing
-   `mocs/*.md` in the project (read one first). Minimum shape:
-   - Frontmatter: `kind: moc`, `name`, `status: active`, `added: <today>`,
-     a `concepts:` list of `[[concepts/<slug>]]` wikilinks, and `tags:`
-     including `moc` + the theme.
-   - A framing paragraph: what question this theme answers and why these
-     concepts belong together.
-   - A layered/grouped organization: 2-4 subsections that each group a
-     few concepts by role, each concept introduced with a one-line job
-     and its `[[concepts/<slug>]]` link. Cite the key `[[literature/...]]`
-     sources that anchor the theme.
-   - A short "open thread / hypothesis" close if one is evident.
+3. **Backlink**: where concepts carry a `mocs:` field, append
+   `[[mocs/<theme>]]`. Don't invent the field.
 
-4. **Backlink** (lightweight): add the MoC to each member concept's
-   frontmatter — if concepts carry a `mocs:` field append `[[mocs/<theme>]]`;
-   otherwise skip rather than invent a schema.
+4. **Index and log**: list the MoC in `_meta/index.md`; append
+   `YYYY-MM-DD promote-moc <theme> (<N> concepts)` to `_meta/log.md`.
 
-5. **Update** `_meta/index.md` (list the new MoC) and append to
-   `_meta/log.md`: `YYYY-MM-DD HH:MM promote-moc <theme> (<N> concepts)`.
+5. **Persist** (`agency.md`): under `standard`, show the diff and wait.
+   Under `max`, commit by path and push. Message:
+   `promote-moc YYYY-MM-DD: <theme> (<N> concepts)`.
 
-6. **Persist** per `~/claude-system/claude/rules/agency.md`:
-   - **`agency: standard`** — show the diff and wait for confirmation.
-   - **`agency: max`** — write, then stage the files you changed by path
-     (never `git add -A`), commit, and push so the Pages site updates.
-     Commit message: `promote-moc YYYY-MM-DD: <theme> (<N> concepts)`.
+## Declines are cheap
 
-## Notes
-
-- **Decline logging is capped.** A decline against a concept set that is
-  unchanged since the last logged decline gets ONE `_meta/log.md` line —
-  `YYYY-MM-DD promote-moc declined (graph unchanged since <sha>, N/N
-  concepts mapped)` — and no commit of its own. Write analysis prose only
-  when the concept set actually changed since the last decline; do not
-  re-derive or restate coverage proofs already recorded. (Context: 13
-  consecutive daily declines in agentic-research each re-proved the same
-  theorem in a 200+ word essay.)
-- Read-then-write: synthesize from the actual concept files, not memory.
-  Every concept in the `concepts:` list must exist.
-- Promotion is reversible (`git revert`); subsumption mistakes are not
-  free to a reader, so bias toward updating an existing MoC over spawning
-  an overlapping one.
-- Pairs with `/lint` (detects candidates) and `/digest` (in `agency: max`
-  repos, runs this after an ingest burst to keep the graph navigable).
+A decline against a concept set unchanged since the last logged decline
+gets one log line, `YYYY-MM-DD promote-moc declined (graph unchanged since
+<sha>, N/N concepts mapped)`, and no commit of its own. Write analysis only
+when the concept set has changed. (Thirteen consecutive daily declines once
+each re-proved the same coverage in a 200-word essay.)

@@ -1,6 +1,6 @@
 ---
 name: digest
-description: /digest runs a web sweep for fresh items related to the project's active concepts and recent iterations since the last digest timestamp in _meta/last_digest, and drops new candidates into raw/_candidates/. Designed for invocation by cron or the schedule skill. Updates _meta/last_digest on completion. In standard repos never auto-ingests (the user curates); in `agency: max` repos it auto-fetches and ingests the top candidates while the coordinator's headroom verdict permits.
+description: Scheduled literature sweep. /digest searches for items newer than _meta/last_digest on the project's active themes and writes a candidates file. In agency max repos it also fetches and ingests the top candidates while the headroom verdict permits.
 respects:
   - ~/claude-system/claude/rules/evaluation.md
   - ~/claude-system/claude/rules/agency.md
@@ -10,124 +10,57 @@ respects:
 
 **First, Read every file listed under `respects:` in the frontmatter.** Framework rules load no other way.
 
-Periodic, low-touch literature sweep. Where `/discover <topic>` is
-user-initiated and focused, `/digest` is autonomous and broad — it
-re-reads the project's current direction and surfaces what's new
-since last time.
-
-Intended to be called by the `schedule` skill or a cron job (e.g.
-daily or weekly). The user is not in the loop when it fires. It never
-overwrites existing candidate files, and it touches `literature/` and
-`concepts/` only through `/ingest`, and only in `agency: max` repos
-(step 8).
-
-## Arguments
-
-None (or an optional `--dry-run` the caller can pass to inspect what
-would be searched without writing).
+The unattended counterpart to `/discover`: no topic argument, it works out
+what the project currently cares about and surfaces what is new. Built for
+cron, so nobody is watching when it runs. `--dry-run` shows the queries
+without writing.
 
 ## Steps
 
-1. **Refuse if the cwd is not inside a project.**
+1. **Window.** Since the ISO timestamp in `_meta/last_digest`; if the file
+   is missing or unparseable, the last 14 days.
 
-2. **Determine the window.** Read `_meta/last_digest`:
-   - If the file exists and contains a parseable ISO timestamp, the
-     window is "since that timestamp".
-   - Otherwise default to the last 14 days.
+2. **Themes.** Build 2–5 queries that together cover the project's current
+   fronts, from `concepts/` (names and `tags:`), the last ~20 lines of
+   `_meta/iteration_log.md` if present, and the tail of `NOTES.md`.
 
-3. **Gather the active themes** — do not search on the raw argument
-   (there is none). Instead, synthesize queries from:
-   - `concepts/` filenames + their `tags:` frontmatter;
-   - the last ~20 entries in `_meta/iteration_log.md` (if present);
-   - the last 50 lines of `NOTES.md`.
+   Write each query as a 3–5 sentence scenario, the way you would brief a
+   research assistant: the problem, the kind of method or result, the
+   context. Keyword piles measurably degrade scientific retrieval;
+   scenario queries reach evidence that lives in appendices and ablations
+   (AutoResearchBench; hub concept `web-grounded-literature`).
 
-   Pick 2–5 queries that together cover the project's current fronts.
-   Use your judgment on how to split — one per active theme is a
-   good default.
+3. **Search**, keep what falls inside the window, and drop any URL already
+   in `raw/_candidates/**` or `literature/**`.
 
-   **Form matters: write each query as a 3–5 sentence natural-language
-   scenario, not a keyword pile.** Describe what you are looking for — the
-   problem, the kind of method or result, the context — in prose, as you
-   would brief a research assistant. Short keyword-style queries
-   (`topic1 topic2 topic3`) measurably degrade scientific retrieval;
-   scenario-rich queries surface the evidence that lives in appendices,
-   ablations, and citation contexts. Breadth comes from query count/spread,
-   depth from query form. (Evidence: AutoResearchBench — see
-   agentic-research `web-grounded-literature` concept.)
+4. **Write** `raw/_candidates/YYYY-MM-DD-digest.md` in `/discover`'s format,
+   with `source: digest` and a `window_since:` field. A second digest on
+   the same day is `-digest-2`. At most 20 entries; more means the queries
+   were too broad. With nothing new, still write the file with
+   `n_returned: 0`: the absence of news is signal.
 
-4. **Run each query** via `WebSearch`, filter on recency inside the
-   window. Deduplicate against URLs already present in
-   `raw/_candidates/**/*.md` and `literature/**/*.md` (read the files
-   and grep for the URL). Skip items already in the knowledge graph.
+5. **Record.** Overwrite `_meta/last_digest` with the current UTC ISO
+   timestamp, append `YYYY-MM-DD digest n=<count> window_since=<iso>`
+   to `_meta/log.md`, then commit and push those three files by path.
 
-5. **Write a single candidates file** at
-   `raw/_candidates/YYYY-MM-DD-digest.md` with the same structure as
-   `/discover` produces, but frontmatter marked `source: digest` and
-   including a `window_since:` field.
-
-   If two digests run on the same day, append a disambiguator
-   (`-digest-2`, `-digest-3`).
-
-6. **Update `_meta/last_digest`** with the current ISO timestamp
-   (UTC). One line, overwrite.
-
-7. **Append to `_meta/log.md`**:
-   `YYYY-MM-DD HH:MM digest n=<count> window_since=<iso>`.
-
-   Then commit the candidates file, `_meta/last_digest` and the log line
-   (staged by path, never `git add -A`) and push.
-
-8. **Agency auto-advance** (only in `agency: max` repos — read
-   `budget.yaml`). After writing candidates, consult the headroom
-   verdict and clear the backlog instead of leaving it for manual
-   curation (per `~/claude-system/claude/rules/agency.md`):
-
-   ```sh
-   ~/claude-system/coordinator/.venv/bin/claude-coordinator-agency --json
-   ```
-
-   - If `verdict` is `hold` (or `budget.yaml` says `agency: standard`,
-     or the field is absent) — **stop here**; this is the default
-     curate-later behavior.
-   - Otherwise, take the highest-ranked candidates (just written, plus
-     any stale uncurated ones already in `raw/_candidates/`) and run
-     `/fetch-paper` then `/ingest` on each, count scaled by
-     `aggressiveness` (canonical scale: `agency.md`).
-     Skip anything already in the graph. Re-check the verdict every
-     couple of items and stop early on `hold` or when a `budget.yaml`
-     ceiling is hit.
-   - Log the auto-advance:
-     `YYYY-MM-DD HH:MM digest-autoingest n=<k> verdict=<v>`.
-   - **Then keep the graph navigable**: run `/promote-moc` (auto-detect).
-     Ingesting fresh concepts can tip a theme over the >=5 threshold; in a
-     `max` repo, promote the Map of Content rather than waiting to be
-     asked. `/promote-moc` self-declines when nothing is genuinely ripe
-     (e.g. the cluster is already covered by an existing MoC), so it is
-     safe to call every run.
-   - **Close the loop**: this candidate file is now curated, so resolve it
-     via the `/curate` lifecycle — append a `## Curation` section with each
-     item's disposition and move the file to `raw/_candidates/_done/` so it
-     stops counting as uncurated. If any candidates were left un-ingested
-     (verdict downgraded mid-run, or below the count cap), leave the file
-     in place for the next run or a `/curate` pass instead of archiving.
+6. **`agency: max` only: advance the backlog.** Under `standard` (or no
+   `agency:` field) stop at step 5; curation is the user's.
+   - Get the verdict:
+     `~/claude-system/coordinator/.venv/bin/claude-coordinator-agency --json`.
+     On `hold`, stop.
+   - Otherwise `/fetch-paper` then `/ingest` the highest-ranked candidates,
+     these plus any older uncurated ones, as many as `agency.md`'s batch
+     scale allows for the current `aggressiveness`. Skip what is already in
+     the graph. Re-check the verdict every couple of items.
+   - Log `YYYY-MM-DD digest-autoingest n=<k> verdict=<v>`.
+   - Run `/promote-moc`. It declines by itself when nothing is ripe.
+   - Close the candidates file the `/curate` way (a `## Curation` section
+     with each item's disposition, then move it to
+     `raw/_candidates/_done/`). If items were left un-ingested, leave the
+     file in place for the next run.
 
 ## Constraints
 
-- **`agency: standard` (default): do not invoke `/ingest` or
-  `/fetch-paper` automatically** — curation is the user's job. Only the
-  opt-in `agency: max` level (step 8) relaxes this, and only while the
-  headroom verdict permits.
-- Do not edit `concepts/` or `literature/` directly; step 8's `/ingest`
-  calls are the only route.
-- If no new items pass the filter, still update `_meta/last_digest`
-  and write a candidates file with `n_returned: 0` — the absence of
-  news is signal.
-- Hard cap: 20 items per digest file. More than that means the queries
-  are too broad; narrow them on the next call.
-
-## Notes
-
-- This skill is designed for cron. If it errors, the caller will see
-  it in the cron log; do not retry inside the skill.
-- Pair with `/lint` — which flags stale candidates files — so the
-  user sees when they've fallen behind curating.
+- Never overwrite an existing candidates file.
+- `literature/` and `concepts/` change only through step 6's `/ingest`.
+- No retries inside the skill: a failure should show in the cron log.
