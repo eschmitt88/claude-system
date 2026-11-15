@@ -42,10 +42,11 @@ total surface area.
 - Adding a skill, hook, rule or knob must say what complexity it adds, why
   a smaller form will not do, and why the benefit is worth maintaining
   forever. Default to rejecting net-new complexity.
-- **Text has a budget too.** A proposal that adds words to a skill, a rule
-  or `CLAUDE.md` names what it removes or shortens in the same file, and
-  states the net word change. Paragraphs added one accepted proposal at a
-  time are how the instruction corpus grew back to its pre-ablation size.
+- **Text has a budget too.** A proposal that changes a skill, a rule or
+  `CLAUDE.md` states its net word change. If the change is positive, name
+  what could be cut or shortened in the same file to offset it, or say why
+  nothing can. Paragraphs added one accepted proposal at a time are how the
+  instruction corpus grew back to its pre-ablation size.
 - Propose the simplest viable form. If the only viable form is complex,
   that is a reason to hold.
 
@@ -70,7 +71,9 @@ total surface area.
    it would now be rejected, the gates have drifted strict: say so in the
    log and name the gate. A cycle where the control fails is a broken gate,
    and from the output alone it looks identical to a quiet one. (This
-   catches drift toward strictness, not a gate mis-set from the start.)
+   catches drift toward strictness, not a gate mis-set from the start.) The
+   text budget is exempt for a control accepted before 2026-11-14: it
+   predates the rule, which was a deliberate tightening.
 
 5. **Write one proposal per survivor** at
    `docs/system-proposals/YYYY-MM-DD-<slug>.md`:

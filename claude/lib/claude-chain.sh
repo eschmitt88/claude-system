@@ -33,9 +33,36 @@ _claude_chain_redact() {
   fi
 }
 
+# claude_alert <key> <title> <body> — push a failure notice (ntfy).
+#
+# Why: a cron run that fails says so only in a log nobody is reading. The
+# 2026-11-09 weekly digest died on an expired login and went unnoticed for
+# six days. systemd jobs have claude-job-failed@.service; cron wrappers call
+# this instead.
+#
+# Topic from NTFY_TOPIC (env, else ~/.claude/.env), server from NTFY_URL
+# (default https://ntfy.sh). No topic => silent no-op. At most one push per
+# <key> per day, so an expired login alerts once, not once per repo.
+# The body is fixed text chosen by the caller: never log content, which can
+# name hosts and private projects.
+claude_alert() {
+  local key="$1" title="$2" body="$3"
+  local topic="${NTFY_TOPIC:-}" url="${NTFY_URL:-}" envf="$HOME/.claude/.env"
+  if [ -z "$topic" ] && [ -r "$envf" ]; then
+    topic="$(sed -n 's/^NTFY_TOPIC=//p' "$envf" | tail -n1 | tr -d "\"'")"
+    [ -n "$url" ] || url="$(sed -n 's/^NTFY_URL=//p' "$envf" | tail -n1 | tr -d "\"'")"
+  fi
+  [ -n "$topic" ] || return 0
+  local stamp="${CLAUDE_STATE_DIR:-$HOME/.claude/state}/alert-$key" today
+  today="$(date +%F)"
+  [ "$(cat "$stamp" 2>/dev/null)" = "$today" ] && return 0
+  mkdir -p "$(dirname "$stamp")" 2>/dev/null && printf '%s\n' "$today" > "$stamp"
+  curl -fsS -m 15 -H "Title: $title" -d "$body" "${url:-https://ntfy.sh}/$topic" >/dev/null 2>&1 || true
+}
+
 claude_chain() {
   local log="$1"; shift
-  local models rest i m
+  local models rest i m reason=error
   IFS=',' read -r -a models <<< "${CLAUDE_MODELS:-opus,sonnet}"
 
   for i in "${!models[@]}"; do
@@ -67,9 +94,27 @@ claude_chain() {
         return 0
       fi
     fi
+    # Classify this attempt from the bytes it appended. Auth outranks the
+    # rest: an expired login fails every model the same way.
+    if tail -c "+$((before + 1))" "$log" | grep -qiE "failed to authenticate|claude auth login"; then
+      reason=auth
+    elif [ "$reason" != auth ] && tail -c "+$((before + 1))" "$log" \
+         | grep -qiE "reached your .{0,40}limit|usage limit|out of (usage )?credits"; then
+      reason=limit
+    fi
     echo "[claude_chain] model '$m' failed or hit its limit; trying next" >> "$log"
   done
 
   echo "[claude_chain] FAILED on every model in the chain (${CLAUDE_MODELS:-opus,sonnet})" >> "$log"
+  local project what="${*: -1}"
+  project="$(basename "$PWD")"
+  case "$reason" in
+    auth)  claude_alert chain-auth "Scheduled Claude runs: login expired" \
+             "$what in $project did not run. The login used by scheduled runs has expired; run 'claude auth login' on the box. Other scheduled runs will fail the same way until then." ;;
+    limit) claude_alert chain-limit "Scheduled Claude run: usage limit" \
+             "$what in $project did not run: every model in the chain (${CLAUDE_MODELS:-opus,sonnet}) is at its usage limit." ;;
+    *)     claude_alert "chain-error-$project" "Scheduled Claude run failed" \
+             "$what in $project failed on every model in the chain. See $log in that project." ;;
+  esac
   return 1
 }

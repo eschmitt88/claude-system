@@ -159,6 +159,41 @@ check "token_logger dedupes repeated records and counts subagents" "[ \"\$TL_SUM
 TL_DB="$(sqlite3 "$TH/.claude/state.db" 'select count(*), sum(input_tokens), sum(output_tokens), sum(cache_creation_tokens), project from token_events')"
 check "token_logger second turn adds a zero delta to state.db"      "[ '$TL_DB' = '2|13|420|1050|tproj' ]"
 
+# ---- claude_chain failure alerts ---------------------------------------------
+# Fake `claude` and `curl` on PATH: no model call, no real push.
+CB="$TMP/chainbin"; CS="$TMP/chainstate"; mkdir -p "$CB" "$CS" "$TMP/chainproj"
+cat > "$CB/claude" <<'FAKE'
+#!/usr/bin/env bash
+case "${FAKE_CLAUDE:-ok}" in
+  auth)  echo "Failed to authenticate: this login reached its time limit"; exit 1 ;;
+  limit) echo "You've reached your opus limit."; exit 1 ;;
+  crash) echo "segfault"; exit 3 ;;
+  *)     echo "done"; exit 0 ;;
+esac
+FAKE
+cat > "$CB/curl" <<'FAKE'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$CURL_LOG"
+FAKE
+chmod +x "$CB/claude" "$CB/curl"
+chain() {  # chain <mode> -> exit code of claude_chain
+  ( cd "$TMP/chainproj" && PATH="$CB:$PATH" FAKE_CLAUDE="$1" CURL_LOG="$TMP/curl.log" \
+      CLAUDE_STATE_DIR="$CS" NTFY_TOPIC=test-topic NTFY_URL=https://push.invalid \
+      CLAUDE_REDACT_SED=/dev/null bash -c 'set -euo pipefail; . "$HOME/claude-system/claude/lib/claude-chain.sh"; claude_chain run.log --permission-mode default "/digest"' )
+}
+: > "$TMP/curl.log"
+chain ok;    check "claude_chain success sends no alert"          "[ ! -s '$TMP/curl.log' ]"
+chain auth && RC=0 || RC=$?
+check "claude_chain returns 1 when every model fails"             "[ $RC -eq 1 ]"
+check "expired login alerts, naming the fix and the skipped run"  "grep -q 'login expired' '$TMP/curl.log' && grep -q 'claude auth login' '$TMP/curl.log' && grep -q '/digest in chainproj' '$TMP/curl.log' && grep -q 'push.invalid/test-topic' '$TMP/curl.log'"
+check "alert carries no log content"                              "! grep -q 'time limit' '$TMP/curl.log'"
+chain auth || true
+check "same failure alerts once per day, not once per run"        "[ \$(wc -l < '$TMP/curl.log') -eq 1 ]"
+chain limit || true
+check "usage limit is a separate alert"                           "[ \$(wc -l < '$TMP/curl.log') -eq 2 ] && tail -1 '$TMP/curl.log' | grep -q 'usage limit'"
+chain crash || true
+check "any other chain failure alerts too"                        "[ \$(wc -l < '$TMP/curl.log') -eq 3 ] && tail -1 '$TMP/curl.log' | grep -q 'failed on every model'"
+
 # ---- system map drift ------------------------------------------------------
 # docs/index.html enumerates skills, hooks and CLIs by hand; fail when the
 # page and the repo disagree, so the map cannot rot silently.
